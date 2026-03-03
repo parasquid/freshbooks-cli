@@ -6,4 +6,4 @@ cd "$SCRIPT_DIR"
 
 mkdir -p .fb
 
-docker compose run --rm fb "$@"
+DOCKER_CLI_HINTS=false docker compose run --rm fb "$@" 2> >(grep -v "No services to build\|Container\|Network\|Volume" >&2)
