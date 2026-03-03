@@ -18,5 +18,5 @@ Gem::Specification.new do |s|
   s.executables   = ["fb"]
 
   s.add_dependency "thor", "~> 1.3"
-  s.add_dependency "httparty", "~> 0.22"
+  s.add_dependency "httparty", ">= 0.24", "< 1.0"
 end
