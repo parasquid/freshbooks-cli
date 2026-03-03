@@ -11,6 +11,14 @@ module FB
     AUTH_URL = "https://auth.freshbooks.com/oauth/authorize"
     ME_URL = "https://api.freshbooks.com/auth/api/v1/users/me"
     REDIRECT_URI = "https://localhost"
+    REQUIRED_SCOPES = %w[
+      user:profile:read
+      user:clients:read
+      user:projects:read
+      user:billable_items:read
+      user:time_entries:read
+      user:time_entries:write
+    ].freeze
 
     class << self
       def data_dir
@@ -64,6 +72,13 @@ module FB
         puts "You need a FreshBooks Developer App. Create one at:"
         puts "  https://my.freshbooks.com/#/developer\n\n"
         puts "Set the redirect URI to: #{REDIRECT_URI}\n\n"
+        puts "Required scopes:"
+        puts "  user:profile:read          (enabled by default)"
+        puts "  user:clients:read"
+        puts "  user:projects:read"
+        puts "  user:billable_items:read"
+        puts "  user:time_entries:read"
+        puts "  user:time_entries:write\n\n"
 
         print "Client ID: "
         client_id = $stdin.gets&.strip
@@ -193,6 +208,8 @@ module FB
         end
 
         data = response.parsed_response
+        check_scopes(data["scope"])
+
         tokens = {
           "access_token" => data["access_token"],
           "refresh_token" => data["refresh_token"],
@@ -202,6 +219,21 @@ module FB
         save_tokens(tokens)
         puts "Authentication successful!"
         tokens
+      end
+
+      def check_scopes(granted_scope)
+        return if granted_scope.nil? # skip check if API doesn't return scopes
+
+        granted = granted_scope.split(" ")
+        missing = REQUIRED_SCOPES - granted
+
+        return if missing.empty?
+
+        puts "ERROR: Your FreshBooks app is missing required scopes:\n\n"
+        missing.each { |s| puts "  - #{s}" }
+        puts "\nAdd them at https://my.freshbooks.com/#/developer"
+        puts "then re-run: fb auth"
+        abort
       end
 
       # --- Business Discovery ---

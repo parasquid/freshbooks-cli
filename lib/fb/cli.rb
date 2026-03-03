@@ -284,6 +284,7 @@ module FB
       {
         name: "fb",
         description: "FreshBooks time tracking CLI",
+        required_scopes: Auth::REQUIRED_SCOPES,
         commands: {
           auth: {
             description: "Authenticate with FreshBooks via OAuth2",

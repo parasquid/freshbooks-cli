@@ -29,8 +29,15 @@ Running any command for the first time triggers setup:
 
 1. Create a FreshBooks app at https://my.freshbooks.com/#/developer
 2. Set the redirect URI to `https://localhost`
-3. Enter your Client ID and Client Secret when prompted
-4. Complete the OAuth flow — your `business_id` and `account_id` are auto-discovered
+3. Enable these scopes:
+   - `user:profile:read` — discover business/account IDs (enabled by default)
+   - `user:clients:read` — list clients for selection
+   - `user:projects:read` — list projects for selection
+   - `user:billable_items:read` — list services for selection
+   - `user:time_entries:read` — list time entries
+   - `user:time_entries:write` — create time entries
+4. Enter your Client ID and Client Secret when prompted
+5. Complete the OAuth flow — your `business_id` and `account_id` are auto-discovered
 
 All data is stored in `~/.fb/` (tokens, config, defaults, cache).
 
