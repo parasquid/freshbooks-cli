@@ -22,11 +22,19 @@ module FB
       end
 
       def business_id
-        config["business_id"] || abort("No business_id in config. Run: fb auth")
+        c = config
+        unless c["business_id"]
+          c = Auth.require_business(c)
+        end
+        c["business_id"]
       end
 
       def account_id
-        config["account_id"] || abort("No account_id in config. Run: fb auth")
+        c = config
+        unless c["account_id"]
+          c = Auth.require_business(c)
+        end
+        c["account_id"]
       end
 
       # --- Paginated fetch ---
@@ -101,12 +109,11 @@ module FB
 
       # --- Time Entries ---
 
-      def fetch_time_entries(started_from:, started_to:)
+      def fetch_time_entries(started_from: nil, started_to: nil)
         url = "#{BASE}/timetracking/business/#{business_id}/time_entries"
-        params = {
-          "search[started_from]" => started_from,
-          "search[started_to]" => started_to
-        }
+        params = {}
+        params["started_from"] = "#{started_from}T00:00:00Z" if started_from
+        params["started_to"] = "#{started_to}T23:59:59Z" if started_to
         fetch_all_pages(url, "time_entries", params: params)
       end
 

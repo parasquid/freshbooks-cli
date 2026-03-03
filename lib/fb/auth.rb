@@ -155,7 +155,9 @@ module FB
         tokens = load_tokens
 
         unless tokens
-          abort("Not authenticated. Run: fb auth")
+          puts "Not authenticated yet. Starting auth flow...\n\n"
+          tokens = authorize(config)
+          discover_business(tokens["access_token"], config)
         end
 
         if token_expired?(tokens)
@@ -164,6 +166,18 @@ module FB
         end
 
         tokens["access_token"]
+      end
+
+      def require_business(config)
+        return config if config["business_id"] && config["account_id"]
+
+        tokens = load_tokens
+        unless tokens
+          puts "Not authenticated yet. Starting auth flow...\n\n"
+          tokens = authorize(config)
+        end
+
+        discover_business(tokens["access_token"], config)
       end
 
       # --- OAuth Flow ---

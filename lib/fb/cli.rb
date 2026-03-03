@@ -80,27 +80,44 @@ module FB
 
     # --- entries ---
 
-    desc "entries", "List time entries for the current month"
+    desc "entries", "List time entries (defaults to current month)"
     method_option :month, type: :numeric, desc: "Month (1-12)"
     method_option :year, type: :numeric, desc: "Year"
+    method_option :from, type: :string, desc: "Start date (YYYY-MM-DD)"
+    method_option :to, type: :string, desc: "End date (YYYY-MM-DD)"
     method_option :format, type: :string, default: "table", desc: "Output format: table or json"
     def entries
       Auth.require_config
 
       today = Date.today
-      month = options[:month] || today.month
-      year = options[:year] || today.year
 
-      first_day = Date.new(year, month, 1)
-      last_day = Date.new(year, month, -1)
+      if options[:from] || options[:to]
+        first_day = options[:from] ? Date.parse(options[:from]) : nil
+        last_day = options[:to] ? Date.parse(options[:to]) : nil
+      else
+        month = options[:month] || today.month
+        year = options[:year] || today.year
+        first_day = Date.new(year, month, 1)
+        last_day = Date.new(year, month, -1)
+      end
 
-      entries = Api.fetch_time_entries(
-        started_from: first_day.to_s,
-        started_to: last_day.to_s
-      )
+      label = if first_day && last_day
+        "#{first_day} to #{last_day}"
+      elsif first_day
+        "from #{first_day} onwards"
+      elsif last_day
+        "up to #{last_day}"
+      end
+
+      entries = Spinner.spin("Fetching time entries#{label ? " (#{label})" : ""}") do
+        Api.fetch_time_entries(
+          started_from: first_day&.to_s,
+          started_to: last_day&.to_s
+        )
+      end
 
       if entries.empty?
-        puts "No time entries for #{first_day.strftime("%B %Y")}."
+        puts "No time entries#{label ? " #{label}" : ""}."
         return
       end
 
@@ -109,7 +126,7 @@ module FB
         return
       end
 
-      maps = Api.build_name_maps
+      maps = Spinner.spin("Resolving names") { Api.build_name_maps }
       entries.sort_by! { |e| e["started_at"] || "" }
 
       rows = entries.map do |e|
@@ -150,7 +167,7 @@ module FB
     private
 
     def select_client(defaults, interactive)
-      clients = Api.fetch_clients
+      clients = Spinner.spin("Fetching clients") { Api.fetch_clients }
 
       if options[:client]
         match = clients.find { |c| display_name(c).downcase == options[:client].downcase }
@@ -183,7 +200,7 @@ module FB
     end
 
     def select_project(client_id, defaults, interactive)
-      projects = Api.fetch_projects_for_client(client_id)
+      projects = Spinner.spin("Fetching projects") { Api.fetch_projects_for_client(client_id) }
 
       if options[:project]
         match = projects.find { |p| p["title"].downcase == options[:project].downcase }
@@ -215,7 +232,7 @@ module FB
 
     def select_service(defaults, interactive)
       if options[:service]
-        services = Api.fetch_services
+        services = Spinner.spin("Fetching services") { Api.fetch_services }
         match = services.find { |s| s["name"].downcase == options[:service].downcase }
         abort("Service not found: #{options[:service]}") unless match
         return match
@@ -223,7 +240,7 @@ module FB
 
       return nil unless interactive
 
-      services = Api.fetch_services
+      services = Spinner.spin("Fetching services") { Api.fetch_services }
       return nil if services.empty?
 
       puts "\nServices:\n\n"
@@ -306,9 +323,11 @@ module FB
             }
           },
           entries: {
-            description: "List time entries for the current month",
+            description: "List time entries (defaults to current month)",
             usage: "fb entries",
             flags: {
+              "--from" => "Start date (YYYY-MM-DD, open-ended if omitted)",
+              "--to" => "End date (YYYY-MM-DD, open-ended if omitted)",
               "--month" => "Month (1-12, defaults to current)",
               "--year" => "Year (defaults to current)",
               "--format" => "Output format: table (default) or json"

@@ -11,7 +11,7 @@ git clone <repo-url> && cd freshbooks-cli
 ./fb auth
 ```
 
-The `./fb` wrapper script runs the CLI inside a Docker container. Data persists in a named Docker volume.
+The `./fb` wrapper script runs the CLI inside a Docker container. Data persists in `.fb/` in the project directory.
 
 ### Ruby gem (native)
 
@@ -39,7 +39,7 @@ Running any command for the first time triggers setup:
 4. Enter your Client ID and Client Secret when prompted
 5. Complete the OAuth flow — your `business_id` and `account_id` are auto-discovered
 
-All data is stored in `~/.fb/` (tokens, config, defaults, cache).
+All data is stored in `~/.fb/` (or `.fb/` in the project directory when using Docker).
 
 ## Commands
 
@@ -61,7 +61,7 @@ Business: Acme Inc
   account_id: 67890
 ```
 
-Tokens auto-refresh before every API call — no need to re-auth unless you revoke app access.
+Tokens auto-refresh before every API call — no need to re-auth unless you revoke app access. If you run any command without being authenticated, the auth flow starts automatically.
 
 ### `fb log`
 
@@ -107,23 +107,29 @@ fb log --client "Acme Corp" --project "Website Redesign" --duration 2.5 --note "
 
 ### `fb entries`
 
-List time entries for the current month.
+List time entries. Defaults to the current month.
 
 ```
 $ fb entries
-Date        Client      Project           Note                        Duration
-----------  ----------  ----------------  --------------------------  --------
-2026-03-01  Acme Corp   Website Redesign  Design review               1.5h
-2026-03-03  Acme Corp   Website Redesign  Built API endpoints         2.5h
+✓ Fetching time entries (2026-03-01 to 2026-03-31)
+✓ Resolving names
+Date                  Client      Project           Note                        Duration
+--------------------  ----------  ----------------  --------------------------  --------
+2026-03-01T00:00:00Z  Acme Corp   Website Redesign  Design review               1.5h
+2026-03-03T00:00:00Z  Acme Corp   Website Redesign  Built API endpoints         2.5h
 
 Total: 4.0h
 ```
 
-Options:
+Date filtering:
 
 ```bash
-fb entries --month 2 --year 2026    # Different month
-fb entries --format json            # Machine-readable output
+fb entries                              # Current month (default)
+fb entries --from 2026-01-01            # Jan 1 onwards
+fb entries --to 2026-02-28             # Everything up to Feb 28
+fb entries --from 2026-01-01 --to 2026-01-31  # Specific range
+fb entries --month 2 --year 2026       # Shorthand for a whole month
+fb entries --format json               # Machine-readable output
 ```
 
 ### `fb help`
