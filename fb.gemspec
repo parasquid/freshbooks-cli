@@ -7,9 +7,15 @@ Gem::Specification.new do |s|
   s.version     = FB::VERSION
   s.summary     = "FreshBooks time tracking CLI"
   s.description = "Manage FreshBooks time entries from the command line. Supports OAuth2 auth, interactive time logging with defaults, and monthly entry listings."
-  s.authors     = ["Tristan"]
-  s.license     = "GPL-3.0"
-  s.homepage    = "https://github.com/tristan/freshbooks-cli"
+  s.authors     = ["parasquid"]
+  s.email       = ["git@parasquid.com"]
+  s.license     = "GPL-3.0-only"
+  s.homepage    = "https://github.com/parasquid/freshbooks-cli"
+
+  s.metadata    = {
+    "source_code_uri" => "https://github.com/parasquid/freshbooks-cli",
+    "bug_tracker_uri" => "https://github.com/parasquid/freshbooks-cli/issues"
+  }
 
   s.required_ruby_version = ">= 3.0"
 
