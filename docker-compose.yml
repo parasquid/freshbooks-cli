@@ -1,0 +1,10 @@
+services:
+  fb:
+    build: .
+    stdin_open: true
+    tty: true
+    volumes:
+      - fb_data:/root/.fb
+
+volumes:
+  fb_data:
