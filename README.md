@@ -11,13 +11,17 @@ git clone <repo-url> && cd freshbooks-cli
 ./fb auth
 ```
 
-### Ruby gem
+The `./fb` wrapper script runs the CLI inside a Docker container. Data persists in a named Docker volume.
+
+### Ruby gem (native)
 
 ```bash
 gem build fb.gemspec
 gem install freshbooks-cli-*.gem
 fb auth
 ```
+
+Installs `fb` to your PATH — runs natively, no Docker involved. Data stored in `~/.fb/`.
 
 ## Setup
 
