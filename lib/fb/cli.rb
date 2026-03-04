@@ -31,7 +31,7 @@ module FB
     method_option :date, type: :string, desc: "Date (YYYY-MM-DD, defaults to today)"
     method_option :yes, type: :boolean, default: false, desc: "Skip confirmation"
     def log
-      Auth.require_config
+      Auth.valid_access_token
       defaults = Auth.load_defaults
       interactive = !(options[:client] && options[:duration] && options[:note])
 
@@ -87,7 +87,7 @@ module FB
     method_option :to, type: :string, desc: "End date (YYYY-MM-DD)"
     method_option :format, type: :string, default: "table", desc: "Output format: table or json"
     def entries
-      Auth.require_config
+      Auth.valid_access_token
 
       today = Date.today
 
