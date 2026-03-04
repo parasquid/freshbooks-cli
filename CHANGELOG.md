@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-03-04
+
+### Added
+- `--interactive` flag to force interactive mode in non-TTY contexts
+- Word-wrapping for notes in `fb entries` table output (replaces 50-char truncation)
+
+### Changed
+- Spinner output moved to stderr and suppressed in non-interactive mode
+- Spinner now respects `--interactive` / `--no-interactive` flags instead of checking TTY independently
+- FreshBooks skill: `--service` is now treated as required when logging time
+
 ## [0.3.0] - 2026-03-04
 
 ### Added
