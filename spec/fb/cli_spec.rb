@@ -15,6 +15,13 @@ RSpec.describe FB::Cli do
     allow(FB::Auth).to receive(:require_config).and_return(config)
   end
 
+  # --- version ---
+
+  describe "version" do
+    When(:output) { capture_stdout { FB::Cli.start(["version"]) } }
+    Then { output.strip == "freshbooks-cli #{FB::VERSION}" }
+  end
+
   # --- help --format json ---
 
   describe "help --format json" do

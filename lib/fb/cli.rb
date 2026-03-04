@@ -10,6 +10,13 @@ module FB
       true
     end
 
+    # --- version ---
+
+    desc "version", "Print the current version"
+    def version
+      puts "freshbooks-cli #{VERSION}"
+    end
+
     # --- auth ---
 
     desc "auth", "Authenticate with FreshBooks via OAuth2"
