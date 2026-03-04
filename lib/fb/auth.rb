@@ -94,6 +94,55 @@ module FB
         config
       end
 
+      def setup_config_from_args(client_id, client_secret)
+        abort("Missing --client-id") if client_id.nil? || client_id.empty?
+        abort("Missing --client-secret") if client_secret.nil? || client_secret.empty?
+
+        config = { "client_id" => client_id, "client_secret" => client_secret }
+        save_config(config)
+        config
+      end
+
+      def authorize_url(config)
+        "#{AUTH_URL}?client_id=#{config["client_id"]}&response_type=code&redirect_uri=#{URI.encode_www_form_component(REDIRECT_URI)}"
+      end
+
+      def extract_code_from_url(redirect_url)
+        uri = URI.parse(redirect_url)
+        params = URI.decode_www_form(uri.query || "").to_h
+        params["code"]
+      end
+
+      def auth_status
+        config = load_config
+        tokens = load_tokens
+        {
+          "config_exists" => !config.nil?,
+          "config_path" => config_path,
+          "tokens_exist" => !tokens.nil?,
+          "tokens_expired" => tokens ? token_expired?(tokens) : nil,
+          "business_id" => config&.dig("business_id"),
+          "account_id" => config&.dig("account_id")
+        }
+      end
+
+      def fetch_businesses(access_token)
+        identity = fetch_identity(access_token)
+        memberships = identity.dig("business_memberships") || []
+        memberships.select { |m| m.dig("business", "account_id") }
+      end
+
+      def select_business(config, business_id, businesses)
+        selected = businesses.find { |m| m.dig("business", "id").to_s == business_id.to_s }
+        abort("Business not found: #{business_id}. Available: #{businesses.map { |m| "#{m.dig("business", "name")} (#{m.dig("business", "id")})" }.join(", ")}") unless selected
+
+        biz = selected["business"]
+        config["business_id"] = biz["id"]
+        config["account_id"] = biz["account_id"]
+        save_config(config)
+        config
+      end
+
       def require_config
         config = load_config
         return config if config

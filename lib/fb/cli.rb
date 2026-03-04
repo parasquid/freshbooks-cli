@@ -10,6 +10,9 @@ module FB
       true
     end
 
+    class_option :no_interactive, type: :boolean, default: false, desc: "Disable interactive prompts (auto-detected when not a TTY)"
+    class_option :format, type: :string, desc: "Output format: table (default) or json"
+
     # --- version ---
 
     desc "version", "Print the current version"
@@ -19,12 +22,153 @@ module FB
 
     # --- auth ---
 
-    desc "auth", "Authenticate with FreshBooks via OAuth2"
-    def auth
-      config = Auth.require_config
-      tokens = Auth.authorize(config)
-      Auth.discover_business(tokens["access_token"], config)
-      puts "\nReady to go! Try: fb entries"
+    desc "auth [SUBCOMMAND] [ARGS]", "Authenticate with FreshBooks via OAuth2 (subcommands: setup, url, callback, status)"
+    method_option :client_id, type: :string, desc: "OAuth client ID (for setup)"
+    method_option :client_secret, type: :string, desc: "OAuth client secret (for setup)"
+    def auth(subcommand = nil, *args)
+      case subcommand
+      when "setup"
+        config = Auth.setup_config_from_args(options[:client_id], options[:client_secret])
+        if options[:format] == "json"
+          puts JSON.pretty_generate({ "config_path" => Auth.config_path, "status" => "saved" })
+        else
+          puts "Config saved to #{Auth.config_path}"
+        end
+
+      when "url"
+        config = Auth.load_config
+        abort("No config found. Run: fb auth setup --client-id ID --client-secret SECRET") unless config
+        url = Auth.authorize_url(config)
+        if options[:format] == "json"
+          puts JSON.pretty_generate({ "url" => url })
+        else
+          puts url
+        end
+
+      when "callback"
+        config = Auth.load_config
+        abort("No config found. Run: fb auth setup --client-id ID --client-secret SECRET") unless config
+        redirect_url = args.first
+        abort("Usage: fb auth callback REDIRECT_URL") unless redirect_url
+        code = Auth.extract_code_from_url(redirect_url)
+        abort("Could not find 'code' parameter in the URL.") unless code
+        tokens = Auth.exchange_code(config, code)
+
+        # Auto-discover businesses
+        businesses = Auth.fetch_businesses(tokens["access_token"])
+        if businesses.length == 1
+          Auth.select_business(config, businesses.first.dig("business", "id"), businesses)
+          biz = businesses.first["business"]
+          if options[:format] == "json"
+            puts JSON.pretty_generate({ "status" => "authenticated", "business" => biz })
+          else
+            puts "Business auto-selected: #{biz["name"]} (#{biz["id"]})"
+          end
+        else
+          if options[:format] == "json"
+            biz_list = businesses.map { |m| m["business"] }
+            puts JSON.pretty_generate({ "status" => "authenticated", "businesses" => biz_list, "business_selected" => false })
+          else
+            puts "Authenticated! Multiple businesses found — select one with: fb business --select ID"
+            businesses.each do |m|
+              biz = m["business"]
+              puts "  #{biz["name"]} (ID: #{biz["id"]})"
+            end
+          end
+        end
+
+      when "status"
+        status_data = Auth.auth_status
+        if options[:format] == "json"
+          puts JSON.pretty_generate(status_data)
+        else
+          puts "Config: #{status_data["config_exists"] ? "found" : "missing"} (#{status_data["config_path"]})"
+          puts "Tokens: #{status_data["tokens_exist"] ? "found" : "missing"}"
+          if status_data["tokens_exist"]
+            puts "Expired: #{status_data["tokens_expired"] ? "yes" : "no"}"
+          end
+          puts "Business ID: #{status_data["business_id"] || "not set"}"
+          puts "Account ID: #{status_data["account_id"] || "not set"}"
+        end
+
+      else
+        unless interactive?
+          abort("Use auth subcommands for non-interactive auth: fb auth setup, fb auth url, fb auth callback, fb auth status")
+        end
+        config = Auth.require_config
+        tokens = Auth.authorize(config)
+        Auth.discover_business(tokens["access_token"], config)
+        puts "\nReady to go! Try: fb entries"
+      end
+    end
+
+    # --- business ---
+
+    desc "business", "List or select a business"
+    method_option :select, type: :string, desc: "Set active business by ID (omit value for interactive picker)"
+    def business
+      Auth.valid_access_token
+      config = Auth.load_config
+      tokens = Auth.load_tokens
+      businesses = Auth.fetch_businesses(tokens["access_token"])
+
+      if businesses.empty?
+        abort("No business memberships found on your FreshBooks account.")
+      end
+
+      if options[:select]
+        Auth.select_business(config, options[:select], businesses)
+        selected = businesses.find { |m| m.dig("business", "id").to_s == options[:select].to_s }
+        biz = selected["business"]
+        if options[:format] == "json"
+          puts JSON.pretty_generate(biz)
+        else
+          puts "Active business: #{biz["name"]} (#{biz["id"]})"
+        end
+        return
+      end
+
+      if options.key?("select") && options[:select].nil?
+        # --select with no value: interactive picker
+        unless interactive?
+          abort("Non-interactive: use --select ID. Available businesses:\n" +
+            businesses.map { |m| "  #{m.dig("business", "name")} (ID: #{m.dig("business", "id")})" }.join("\n"))
+        end
+
+        puts "\nBusinesses:\n\n"
+        businesses.each_with_index do |m, i|
+          biz = m["business"]
+          active = biz["id"].to_s == config["business_id"].to_s ? " [active]" : ""
+          puts "  #{i + 1}. #{biz["name"]} (#{biz["id"]})#{active}"
+        end
+
+        print "\nSelect business (1-#{businesses.length}): "
+        input = $stdin.gets&.strip
+        abort("Cancelled.") if input.nil? || input.empty?
+
+        idx = input.to_i - 1
+        abort("Invalid selection.") if idx < 0 || idx >= businesses.length
+
+        selected_biz = businesses[idx]
+        Auth.select_business(config, selected_biz.dig("business", "id"), businesses)
+        puts "Active business: #{selected_biz.dig("business", "name")} (#{selected_biz.dig("business", "id")})"
+        return
+      end
+
+      # Default: list businesses
+      if options[:format] == "json"
+        biz_list = businesses.map do |m|
+          biz = m["business"]
+          biz.merge("active" => biz["id"].to_s == config["business_id"].to_s)
+        end
+        puts JSON.pretty_generate(biz_list)
+      else
+        businesses.each do |m|
+          biz = m["business"]
+          active = biz["id"].to_s == config["business_id"].to_s ? " [active]" : ""
+          puts "#{biz["name"]} (ID: #{biz["id"]})#{active}"
+        end
+      end
     end
 
     # --- log ---
@@ -40,25 +184,26 @@ module FB
     def log
       Auth.valid_access_token
       defaults = Auth.load_defaults
-      interactive = !(options[:client] && options[:duration] && options[:note])
 
-      client = select_client(defaults, interactive)
-      project = select_project(client["id"], defaults, interactive)
-      service = select_service(defaults, interactive)
-      date = pick_date(interactive)
-      duration_hours = pick_duration(interactive)
-      note = pick_note(interactive)
+      client = select_client(defaults)
+      project = select_project(client["id"], defaults)
+      service = select_service(defaults)
+      date = pick_date
+      duration_hours = pick_duration
+      note = pick_note
 
       client_name = display_name(client)
 
-      puts "\n--- Time Entry Summary ---"
-      puts "  Client:   #{client_name}"
-      puts "  Project:  #{project ? project["title"] : "(none)"}"
-      puts "  Service:  #{service ? service["name"] : "(none)"}"
-      puts "  Date:     #{date}"
-      puts "  Duration: #{duration_hours}h"
-      puts "  Note:     #{note}"
-      puts "--------------------------\n\n"
+      unless options[:format] == "json"
+        puts "\n--- Time Entry Summary ---"
+        puts "  Client:   #{client_name}"
+        puts "  Project:  #{project ? project["title"] : "(none)"}"
+        puts "  Service:  #{service ? service["name"] : "(none)"}"
+        puts "  Date:     #{date}"
+        puts "  Duration: #{duration_hours}h"
+        puts "  Note:     #{note}"
+        puts "--------------------------\n\n"
+      end
 
       unless options[:yes]
         print "Submit? (Y/n): "
@@ -76,8 +221,13 @@ module FB
       entry["project_id"] = project["id"] if project
       entry["service_id"] = service["id"] if service
 
-      Api.create_time_entry(entry)
-      puts "Time entry created!"
+      result = Api.create_time_entry(entry)
+
+      if options[:format] == "json"
+        puts JSON.pretty_generate(result)
+      else
+        puts "Time entry created!"
+      end
 
       new_defaults = { "client_id" => client["id"] }
       new_defaults["project_id"] = project["id"] if project
@@ -92,7 +242,6 @@ module FB
     method_option :year, type: :numeric, desc: "Year"
     method_option :from, type: :string, desc: "Start date (YYYY-MM-DD)"
     method_option :to, type: :string, desc: "End date (YYYY-MM-DD)"
-    method_option :format, type: :string, default: "table", desc: "Output format: table or json"
     def entries
       Auth.valid_access_token
 
@@ -124,7 +273,11 @@ module FB
       end
 
       if entries.empty?
-        puts "No time entries#{label ? " #{label}" : ""}."
+        if options[:format] == "json"
+          puts "[]"
+        else
+          puts "No time entries#{label ? " #{label}" : ""}."
+        end
         return
       end
 
@@ -154,7 +307,6 @@ module FB
     # --- clients ---
 
     desc "clients", "List all clients"
-    method_option :format, type: :string, default: "table", desc: "Output format: table or json"
     def clients
       Auth.valid_access_token
       clients = Spinner.spin("Fetching clients") { Api.fetch_clients }
@@ -183,7 +335,6 @@ module FB
     # --- projects ---
 
     desc "projects", "List all projects"
-    method_option :format, type: :string, default: "table", desc: "Output format: table or json"
     method_option :client, type: :string, desc: "Filter by client name"
     def projects
       Auth.valid_access_token
@@ -218,7 +369,6 @@ module FB
     # --- services ---
 
     desc "services", "List all services"
-    method_option :format, type: :string, default: "table", desc: "Output format: table or json"
     def services
       Auth.valid_access_token
       services = Spinner.spin("Fetching services") { Api.fetch_services }
@@ -259,6 +409,15 @@ module FB
       week_entries = entries.select { |e| d = e["started_at"]; d && d >= week_start.to_s && d <= today.to_s }
       month_entries = entries
 
+      if options[:format] == "json"
+        puts JSON.pretty_generate({
+          "today" => build_status_data(today.to_s, today.to_s, today_entries, maps),
+          "this_week" => build_status_data(week_start.to_s, today.to_s, week_entries, maps),
+          "this_month" => build_status_data(month_start.to_s, today.to_s, month_entries, maps)
+        })
+        return
+      end
+
       print_status_section("Today (#{today})", today_entries, maps)
       print_status_section("This Week (#{week_start} to #{today})", week_entries, maps)
       print_status_section("This Month (#{month_start} to #{today})", month_entries, maps)
@@ -275,6 +434,7 @@ module FB
       if options[:id]
         entry_id = options[:id]
       else
+        abort("Missing required flag: --id") unless interactive?
         entry_id = pick_entry_interactive("delete")
       end
 
@@ -285,7 +445,12 @@ module FB
       end
 
       Spinner.spin("Deleting time entry") { Api.delete_time_entry(entry_id) }
-      puts "Time entry #{entry_id} deleted."
+
+      if options[:format] == "json"
+        puts JSON.pretty_generate({ "id" => entry_id, "deleted" => true })
+      else
+        puts "Time entry #{entry_id} deleted."
+      end
     end
 
     # --- edit ---
@@ -302,7 +467,13 @@ module FB
     def edit
       Auth.valid_access_token
 
-      entry_id = options[:id] || pick_entry_interactive("edit")
+      if options[:id]
+        entry_id = options[:id]
+      else
+        abort("Missing required flag: --id") unless interactive?
+        entry_id = pick_entry_interactive("edit")
+      end
+
       entry = Spinner.spin("Fetching time entry") { Api.fetch_time_entry(entry_id) }
       abort("Time entry not found.") unless entry
 
@@ -316,13 +487,15 @@ module FB
       current_hours = (entry["duration"].to_i / 3600.0).round(2)
       new_hours = fields["duration"] ? (fields["duration"].to_i / 3600.0).round(2) : current_hours
 
-      puts "\n--- Edit Summary ---"
-      puts "  Date:     #{fields["started_at"] || entry["started_at"]}"
-      puts "  Client:   #{fields["client_id"] ? maps[:clients][fields["client_id"].to_s] : current_client}"
-      puts "  Project:  #{fields["project_id"] ? maps[:projects][fields["project_id"].to_s] : current_project}"
-      puts "  Duration: #{new_hours}h"
-      puts "  Note:     #{fields["note"] || entry["note"]}"
-      puts "--------------------\n\n"
+      unless options[:format] == "json"
+        puts "\n--- Edit Summary ---"
+        puts "  Date:     #{fields["started_at"] || entry["started_at"]}"
+        puts "  Client:   #{fields["client_id"] ? maps[:clients][fields["client_id"].to_s] : current_client}"
+        puts "  Project:  #{fields["project_id"] ? maps[:projects][fields["project_id"].to_s] : current_project}"
+        puts "  Duration: #{new_hours}h"
+        puts "  Note:     #{fields["note"] || entry["note"]}"
+        puts "--------------------\n\n"
+      end
 
       unless options[:yes]
         print "Save changes? (Y/n): "
@@ -330,8 +503,13 @@ module FB
         abort("Cancelled.") if answer == "n"
       end
 
-      Spinner.spin("Updating time entry") { Api.update_time_entry(entry_id, fields) }
-      puts "Time entry #{entry_id} updated."
+      result = Spinner.spin("Updating time entry") { Api.update_time_entry(entry_id, fields) }
+
+      if options[:format] == "json"
+        puts JSON.pretty_generate(result)
+      else
+        puts "Time entry #{entry_id} updated."
+      end
     end
 
     # --- cache ---
@@ -357,6 +535,23 @@ module FB
         end
       when "status"
         cache = Auth.load_cache
+        if options[:format] == "json"
+          if cache["updated_at"]
+            age = Time.now.to_i - cache["updated_at"]
+            puts JSON.pretty_generate({
+              "updated_at" => cache["updated_at"],
+              "age_seconds" => age,
+              "fresh" => age < 600,
+              "clients" => (cache["clients_data"] || []).length,
+              "projects" => (cache["projects_data"] || []).length,
+              "services" => (cache["services_data"] || []).length
+            })
+          else
+            puts JSON.pretty_generate({ "fresh" => false, "clients" => 0, "projects" => 0, "services" => 0 })
+          end
+          return
+        end
+
         if cache["updated_at"]
           age = Time.now.to_i - cache["updated_at"]
           updated = Time.at(cache["updated_at"]).strftime("%Y-%m-%d %H:%M:%S")
@@ -377,7 +572,6 @@ module FB
     # --- help ---
 
     desc "help [COMMAND]", "Describe available commands or one specific command"
-    method_option :format, type: :string, desc: "Output format: text (default) or json"
     def help(command = nil)
       if options[:format] == "json"
         puts JSON.pretty_generate(help_json)
@@ -388,7 +582,12 @@ module FB
 
     private
 
-    def select_client(defaults, interactive)
+    def interactive?
+      return false if options[:no_interactive]
+      $stdin.tty?
+    end
+
+    def select_client(defaults)
       clients = Spinner.spin("Fetching clients") { Api.fetch_clients }
 
       if options[:client]
@@ -398,6 +597,15 @@ module FB
       end
 
       abort("No clients found.") if clients.empty?
+
+      unless interactive?
+        # Non-interactive: auto-select if single, abort with list if multiple
+        default_client = clients.find { |c| c["id"].to_i == defaults["client_id"].to_i }
+        return default_client if default_client
+        return clients.first if clients.length == 1
+        names = clients.map { |c| display_name(c) }.join(", ")
+        abort("Multiple clients found. Use --client to specify: #{names}")
+      end
 
       puts "\nClients:\n\n"
       clients.each_with_index do |c, i|
@@ -421,7 +629,7 @@ module FB
       clients[idx]
     end
 
-    def select_project(client_id, defaults, interactive)
+    def select_project(client_id, defaults)
       projects = Spinner.spin("Fetching projects") { Api.fetch_projects_for_client(client_id) }
 
       if options[:project]
@@ -431,6 +639,14 @@ module FB
       end
 
       return nil if projects.empty?
+
+      unless interactive?
+        # Non-interactive: auto-select if single, return nil if multiple (optional)
+        default_project = projects.find { |p| p["id"].to_i == defaults["project_id"].to_i }
+        return default_project if default_project
+        return projects.first if projects.length == 1
+        return nil
+      end
 
       puts "\nProjects:\n\n"
       projects.each_with_index do |p, i|
@@ -452,7 +668,7 @@ module FB
       projects[idx]
     end
 
-    def select_service(defaults, interactive)
+    def select_service(defaults)
       if options[:service]
         services = Spinner.spin("Fetching services") { Api.fetch_services }
         match = services.find { |s| s["name"].downcase == options[:service].downcase }
@@ -460,7 +676,7 @@ module FB
         return match
       end
 
-      return nil unless interactive
+      return nil unless interactive?
 
       services = Spinner.spin("Fetching services") { Api.fetch_services }
       return nil if services.empty?
@@ -485,19 +701,21 @@ module FB
       services[idx]
     end
 
-    def pick_date(interactive)
+    def pick_date
       return options[:date] if options[:date]
 
       today = Date.today.to_s
-      return today unless interactive
+      return today unless interactive?
 
       print "\nDate [#{today}]: "
       input = $stdin.gets&.strip
       (input.nil? || input.empty?) ? today : input
     end
 
-    def pick_duration(interactive)
+    def pick_duration
       return options[:duration] if options[:duration]
+
+      abort("Missing required flag: --duration") unless interactive?
 
       print "\nDuration (hours): "
       input = $stdin.gets&.strip
@@ -505,8 +723,10 @@ module FB
       input.to_f
     end
 
-    def pick_note(interactive)
+    def pick_note
       return options[:note] if options[:note]
+
+      abort("Missing required flag: --note") unless interactive?
 
       print "\nNote: "
       input = $stdin.gets&.strip
@@ -547,6 +767,22 @@ module FB
 
       total = entries.sum { |e| e["duration"].to_i } / 3600.0
       puts "  Total: #{total.round(2)}h"
+    end
+
+    def build_status_data(from, to, entries, maps)
+      entry_data = entries.map do |e|
+        {
+          "id" => e["id"],
+          "client" => maps[:clients][e["client_id"].to_s] || e["client_id"].to_s,
+          "project" => maps[:projects][e["project_id"].to_s] || "-",
+          "duration" => e["duration"],
+          "hours" => (e["duration"].to_i / 3600.0).round(2),
+          "note" => e["note"],
+          "started_at" => e["started_at"]
+        }
+      end
+      total = entries.sum { |e| e["duration"].to_i } / 3600.0
+      { "from" => from, "to" => to, "entries" => entry_data, "total_hours" => total.round(2) }
     end
 
     def pick_entry_interactive(action)
@@ -630,23 +866,46 @@ module FB
         name: "fb",
         description: "FreshBooks time tracking CLI",
         required_scopes: Auth::REQUIRED_SCOPES,
+        global_flags: {
+          "--no-interactive" => "Disable interactive prompts (auto-detected when not a TTY)",
+          "--format json" => "Output format: json (available on all commands)"
+        },
         commands: {
           auth: {
             description: "Authenticate with FreshBooks via OAuth2",
-            usage: "fb auth",
-            interactive: true
+            usage: "fb auth [SUBCOMMAND]",
+            interactive: "Interactive when no subcommand; subcommands are non-interactive",
+            subcommands: {
+              "setup" => "Save OAuth credentials: fb auth setup --client-id ID --client-secret SECRET",
+              "url" => "Print the OAuth authorization URL",
+              "callback" => "Exchange OAuth code: fb auth callback REDIRECT_URL",
+              "status" => "Show current auth state (config, tokens, business)"
+            },
+            flags: {
+              "--client-id" => "OAuth client ID (for setup subcommand)",
+              "--client-secret" => "OAuth client secret (for setup subcommand)"
+            }
+          },
+          business: {
+            description: "List or select a business",
+            usage: "fb business [--select ID]",
+            interactive: "Interactive with --select (no value); non-interactive with --select ID",
+            flags: {
+              "--select ID" => "Set active business by ID",
+              "--select" => "Interactive business picker (no value)"
+            }
           },
           log: {
-            description: "Log a time entry (interactive prompts with defaults from last use)",
+            description: "Log a time entry",
             usage: "fb log",
-            interactive: true,
+            interactive: "Prompts for missing fields when interactive; requires --duration and --note when non-interactive",
             flags: {
-              "--client" => "Pre-select client by name (skip prompt)",
-              "--project" => "Pre-select project by name (skip prompt)",
-              "--service" => "Pre-select service by name (skip prompt)",
-              "--duration" => "Duration in hours (e.g. 2.5)",
-              "--note" => "Work description",
-              "--date" => "Date (YYYY-MM-DD, defaults to today)",
+              "--client" => "Client name (required non-interactive if multiple clients, auto-selected if single)",
+              "--project" => "Project name (optional, auto-selected if single)",
+              "--service" => "Service name (optional)",
+              "--duration" => "Duration in hours, e.g. 2.5 (required non-interactive)",
+              "--note" => "Work description (required non-interactive)",
+              "--date" => "Date YYYY-MM-DD (defaults to today)",
               "--yes" => "Skip confirmation prompt"
             }
           },
@@ -657,31 +916,23 @@ module FB
               "--from" => "Start date (YYYY-MM-DD, open-ended if omitted)",
               "--to" => "End date (YYYY-MM-DD, open-ended if omitted)",
               "--month" => "Month (1-12, defaults to current)",
-              "--year" => "Year (defaults to current)",
-              "--format" => "Output format: table (default) or json"
+              "--year" => "Year (defaults to current)"
             }
           },
           clients: {
             description: "List all clients",
-            usage: "fb clients",
-            flags: {
-              "--format" => "Output format: table (default) or json"
-            }
+            usage: "fb clients"
           },
           projects: {
             description: "List all projects",
             usage: "fb projects",
             flags: {
-              "--client" => "Filter by client name",
-              "--format" => "Output format: table (default) or json"
+              "--client" => "Filter by client name"
             }
           },
           services: {
             description: "List all services",
-            usage: "fb services",
-            flags: {
-              "--format" => "Output format: table (default) or json"
-            }
+            usage: "fb services"
           },
           status: {
             description: "Show hours summary for today, this week, and this month",
@@ -689,19 +940,19 @@ module FB
           },
           delete: {
             description: "Delete a time entry",
-            usage: "fb delete",
-            interactive: true,
+            usage: "fb delete --id ID --yes",
+            interactive: "Interactive picker when no --id; requires --id when non-interactive",
             flags: {
-              "--id" => "Time entry ID (skip interactive picker)",
+              "--id" => "Time entry ID (required non-interactive)",
               "--yes" => "Skip confirmation prompt"
             }
           },
           edit: {
             description: "Edit a time entry",
-            usage: "fb edit",
-            interactive: true,
+            usage: "fb edit --id ID [--duration H] [--note TEXT] --yes",
+            interactive: "Interactive picker and field editor when no --id; requires --id when non-interactive",
             flags: {
-              "--id" => "Time entry ID (skip interactive picker)",
+              "--id" => "Time entry ID (required non-interactive)",
               "--duration" => "New duration in hours",
               "--note" => "New note",
               "--date" => "New date (YYYY-MM-DD)",
@@ -722,10 +973,7 @@ module FB
           },
           help: {
             description: "Show help information",
-            usage: "fb help [COMMAND]",
-            flags: {
-              "--format" => "Output format: text (default) or json"
-            }
+            usage: "fb help [COMMAND]"
           }
         }
       }
