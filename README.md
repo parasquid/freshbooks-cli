@@ -153,9 +153,11 @@ Time entry created!
 **Non-interactive mode** — pass flags to skip prompts:
 
 ```bash
-fb log --client "Acme Corp" --project "Website Redesign" --duration 2.5 --note "Built API endpoints" --yes
+fb log --client "Acme Corp" --project "Website Redesign" --service "Development" --duration 2.5 --note "Built API endpoints" --yes
 fb log --client "Acme Corp" --duration 2.5 --note "Work" --yes --format json  # JSON output with entry ID
 ```
+
+**Note:** Services are project-scoped. Use `fb projects --format json` to see available services per project.
 
 ### `fb entries`
 
@@ -163,10 +165,10 @@ List time entries. Defaults to the current month.
 
 ```
 $ fb entries
-ID      Date        Client      Project           Note                 Duration
-------  ----------  ----------  ----------------  -------------------  --------
-12345   2026-03-01  Acme Corp   Website Redesign  Design review        1.5h
-12346   2026-03-03  Acme Corp   Website Redesign  Built API endpoints  2.5h
+ID      Date        Client      Project           Service      Note                 Duration
+------  ----------  ----------  ----------------  -----------  -------------------  --------
+12345   2026-03-01  Acme Corp   Website Redesign  Development  Design review        1.5h
+12346   2026-03-03  Acme Corp   Website Redesign  Development  Built API endpoints  2.5h
 
 Total: 4.0h
 ```
@@ -203,7 +205,7 @@ fb projects --format json          # Machine-readable output
 
 ### `fb services`
 
-List all services.
+List business-level services. Note: most services in FreshBooks are project-scoped — use `fb projects --format json` to see services per project.
 
 ```bash
 fb services                # Table output
@@ -255,6 +257,7 @@ fb edit                              # Interactive — pick entry, edit fields
 fb edit --id 12345                   # Edit specific entry interactively
 fb edit --id 12345 --duration 1.5 --yes  # Scripted — update duration, skip confirmation
 fb edit --id 12345 --note "Updated note" --date 2026-03-01 --yes
+fb edit --id 12345 --service "Meetings" --yes  # Change service
 fb edit --id 12345 --client "Globex Inc" --project "Mobile App" --yes
 fb edit --id 12345 --duration 2 --yes --format json  # JSON output
 ```
@@ -298,7 +301,7 @@ fb auth callback "https://localhost?code=abc123"
 fb business --select 12345
 
 # 5. Start using the API
-fb log --client "Acme Corp" --duration 2.5 --note "Work" --yes --format json
+fb log --client "Acme Corp" --service "Development" --duration 2.5 --note "Work" --yes --format json
 fb entries --format json
 fb status --format json
 ```
@@ -309,3 +312,4 @@ fb status --format json
 - `--no-interactive` — explicit non-interactive mode (also auto-detected)
 - `--id` — required for edit/delete in non-interactive mode
 - `--client`, `--duration`, `--note` — required for log in non-interactive mode (with multiple clients)
+- `--service` — specify service by name (services are project-scoped; see `fb projects --format json`)

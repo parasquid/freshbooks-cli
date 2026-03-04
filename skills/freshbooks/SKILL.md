@@ -46,6 +46,8 @@ When executing `fb` commands:
 - **Always** use `--id` for `edit` and `delete` commands
 - Parse JSON output to extract entry IDs, totals, and status
 
+**Important: Services are project-scoped.** `fb services` may return empty — services are embedded in project data. When logging time, use `--service "Name"` with the service name from the project (visible in `fb projects --format json` under the `services` array). Common service names: Development, Research, General, Meetings.
+
 ## Command Reference
 
 ### Check Status
@@ -57,15 +59,16 @@ fb entries --from YYYY-MM-DD --to YYYY-MM-DD --format json  # Date range
 
 ### Log Time
 ```bash
-fb log --client "Client Name" --duration HOURS --note "Description" --yes --format json
-# Optional: --project "Name" --service "Name" --date YYYY-MM-DD
+fb log --client "Client Name" --project "Project" --service "Service" --duration HOURS --note "Description" --yes --format json
+# --project, --service, --date are optional; --client, --duration, --note are required
 ```
 
 ### Edit Entry
 ```bash
 fb edit --id ENTRY_ID --duration HOURS --yes --format json
 fb edit --id ENTRY_ID --note "New note" --yes --format json
-fb edit --id ENTRY_ID --date YYYY-MM-DD --yes --format json
+fb edit --id ENTRY_ID --service "Meetings" --yes --format json
+# Edit preserves all existing fields — only specified flags are changed
 ```
 
 ### Delete Entry
@@ -76,9 +79,8 @@ fb delete --id ENTRY_ID --yes --format json
 ### List Resources
 ```bash
 fb clients --format json
-fb projects --format json
-fb projects --client "Name" --format json
-fb services --format json
+fb projects --format json                   # Includes project-scoped services in response
+fb projects --client "Name" --format json   # Filter by client; services array shows available services
 fb business --format json
 ```
 
@@ -92,8 +94,8 @@ fb cache refresh                # Force refresh
 
 ### Log hours for today
 1. `fb clients --format json` — get available clients
-2. `fb projects --client "Name" --format json` — get projects for that client
-3. `fb log --client "Name" --project "Project" --duration 2.5 --note "Work description" --yes --format json`
+2. `fb projects --client "Name" --format json` — get projects and their services
+3. `fb log --client "Name" --project "Project" --service "Service" --duration 2.5 --note "Work description" --yes --format json`
 
 ### Check how many hours logged today
 ```bash

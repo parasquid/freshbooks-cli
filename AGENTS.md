@@ -25,7 +25,7 @@ rake release
 The gem is a single-module CLI (`FB`) built on Thor, with four components:
 
 - **Auth** (`lib/fb/auth.rb`) — OAuth2 flow, token management, config/cache/defaults persistence. All state stored as JSON files in `Auth.data_dir` (`~/.fb/` or `.fb/` in Docker). Tests redirect this to a tmpdir. Provides both interactive (`setup_config`, `authorize`, `discover_business`) and non-interactive (`setup_config_from_args`, `authorize_url`, `extract_code_from_url`, `exchange_code`, `fetch_businesses`, `select_business`, `auth_status`) methods.
-- **Api** (`lib/fb/api.rb`) — FreshBooks REST client. All HTTP goes through HTTParty. Paginated fetching via `fetch_all_pages`. Name maps (client/project ID → name) cached for 10 minutes in `cache.json`.
+- **Api** (`lib/fb/api.rb`) — FreshBooks REST client. All HTTP goes through HTTParty. Paginated fetching via `fetch_all_pages`. Name maps (client/project/service ID → name) cached for 10 minutes in `cache.json`. Services are project-scoped — `build_name_maps` extracts them from project data, not just the global services endpoint.
 - **Cli** (`lib/fb/cli.rb`) — Thor subclass. Commands: `auth`, `business`, `log`, `entries`, `clients`, `projects`, `services`, `status`, `edit`, `delete`, `cache`, `help`, `version`. Interactive prompts read from `$stdin`. Interactive detection via `$stdin.tty?` + `--no-interactive` flag.
 - **Spinner** (`lib/fb/spinner.rb`) — Braille animation spinner. Yields to a block, returns block result. Globally stubbed in tests to just yield.
 
@@ -73,3 +73,9 @@ All commands support `--format json` (global class option). Mutation commands (`
 - Config, tokens, defaults, cache are all separate JSON files under `Auth.data_dir`
 - `Auth.data_dir=` is the seam for test isolation — point it at a tmpdir
 - Docker wrapper (`./fb`) runs CLI in container with `.fb/` bind-mounted and host `TZ` passed through
+
+## FreshBooks API Gotchas
+
+- **Services are project-scoped.** The global `/comments/business/{id}/services` endpoint often returns empty. Services are embedded in project JSON under the `services` array. Use `fb projects --format json` to see available services per project.
+- **Dates must be full datetimes.** The API rejects bare dates like `"2026-03-04"` — use `"2026-03-04T00:00:00Z"`. The CLI's `normalize_datetime` helper handles this.
+- **PUT replaces, not patches.** Updating a time entry replaces the entire record. The `edit` command sends all existing fields (client_id, project_id, service_id, duration, note, started_at, is_logged) alongside any changed fields to avoid wiping data.
