@@ -546,7 +546,7 @@ module FB
               "fresh" => age < 600,
               "clients" => (cache["clients_data"] || []).length,
               "projects" => (cache["projects_data"] || []).length,
-              "services" => (cache["services_data"] || []).length
+              "services" => (cache["services"] || cache["services_data"] || {}).length
             })
           else
             puts JSON.pretty_generate({ "fresh" => false, "clients" => 0, "projects" => 0, "services" => 0 })
@@ -562,7 +562,7 @@ module FB
           puts "Age: #{age}s (#{fresh ? "fresh" : "stale"})"
           puts "Clients: #{(cache["clients_data"] || []).length}"
           puts "Projects: #{(cache["projects_data"] || []).length}"
-          puts "Services: #{(cache["services_data"] || []).length}"
+          puts "Services: #{(cache["services"] || cache["services_data"] || {}).length}"
         else
           puts "No cache data."
         end
