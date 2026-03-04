@@ -299,7 +299,7 @@ module FB
       entries.sort_by! { |e| e["started_at"] || "" }
 
       rows = entries.map do |e|
-        date = e["started_at"] || "?"
+        date = (e["local_started_at"] || e["started_at"] || "?").slice(0, 10)
         client = maps[:clients][e["client_id"].to_s] || e["client_id"].to_s
         project = maps[:projects][e["project_id"].to_s] || "-"
         service = maps[:services][e["service_id"].to_s] || "-"
