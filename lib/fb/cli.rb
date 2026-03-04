@@ -3,6 +3,7 @@
 require "thor"
 require "json"
 require "date"
+require "io/console"
 
 module FB
   class Cli < Thor
@@ -294,12 +295,12 @@ module FB
         client = maps[:clients][e["client_id"].to_s] || e["client_id"].to_s
         project = maps[:projects][e["project_id"].to_s] || "-"
         service = maps[:services][e["service_id"].to_s] || "-"
-        note = (e["note"] || "").slice(0, 50)
+        note = e["note"] || ""
         hours = (e["duration"].to_i / 3600.0).round(2)
         [e["id"].to_s, date, client, project, service, note, "#{hours}h"]
       end
 
-      print_table(["ID", "Date", "Client", "Project", "Service", "Note", "Duration"], rows)
+      print_table(["ID", "Date", "Client", "Project", "Service", "Note", "Duration"], rows, wrap_col: 5)
 
       total = entries.sum { |e| e["duration"].to_i } / 3600.0
       puts "\nTotal: #{total.round(2)}h"
@@ -747,15 +748,56 @@ module FB
       input
     end
 
-    def print_table(headers, rows)
+    def print_table(headers, rows, wrap_col: nil)
       widths = headers.each_with_index.map do |h, i|
         [h.length, *rows.map { |r| r[i].to_s.length }].max
+      end
+
+      # Word-wrap a specific column if it would exceed terminal width
+      if wrap_col
+        term_width = IO.console&.winsize&.last || ENV["COLUMNS"]&.to_i || 120
+        fixed_width = widths.each_with_index.sum { |w, i| i == wrap_col ? 0 : w } + (widths.length - 1) * 2
+        max_wrap = term_width - fixed_width
+        max_wrap = [max_wrap, 20].max
+        widths[wrap_col] = [widths[wrap_col], max_wrap].min
       end
 
       fmt = widths.map { |w| "%-#{w}s" }.join("  ")
       puts fmt % headers
       puts widths.map { |w| "-" * w }.join("  ")
-      rows.each { |r| puts fmt % r }
+
+      rows.each do |r|
+        if wrap_col && r[wrap_col].to_s.length > widths[wrap_col]
+          lines = word_wrap(r[wrap_col].to_s, widths[wrap_col])
+          padded = widths.each_with_index.map { |w, i| i == wrap_col ? "" : " " * w }
+          pad_fmt = padded.each_with_index.map { |p, i| i == wrap_col ? "%s" : "%-#{widths[i]}s" }.join("  ")
+          lines.each_with_index do |line, li|
+            if li == 0
+              row = r.dup
+              row[wrap_col] = line
+              puts fmt % row
+            else
+              blank = padded.dup
+              blank[wrap_col] = line
+              puts pad_fmt % blank
+            end
+          end
+        else
+          puts fmt % r
+        end
+      end
+    end
+
+    def word_wrap(text, width)
+      lines = []
+      remaining = text
+      while remaining.length > width
+        break_at = remaining.rindex(" ", width) || width
+        lines << remaining[0...break_at]
+        remaining = remaining[break_at..].lstrip
+      end
+      lines << remaining unless remaining.empty?
+      lines
     end
 
     def print_status_section(title, entries, maps)

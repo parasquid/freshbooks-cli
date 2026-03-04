@@ -5,14 +5,19 @@ module FB
     FRAMES = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
     def self.spin(message)
-      done = false
       result = nil
 
+      unless $stderr.tty?
+        result = yield
+        return result
+      end
+
+      done = false
       thread = Thread.new do
         i = 0
         while !done
-          print "\r#{FRAMES[i % FRAMES.length]} #{message}"
-          $stdout.flush
+          $stderr.print "\r#{FRAMES[i % FRAMES.length]} #{message}"
+          $stderr.flush
           i += 1
           sleep 0.08
         end
@@ -23,7 +28,7 @@ module FB
       ensure
         done = true
         thread.join
-        print "\r✓ #{message}\n"
+        $stderr.print "\r✓ #{message}\n"
       end
 
       result
