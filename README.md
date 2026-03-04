@@ -2,6 +2,8 @@
 
 A command-line tool for managing FreshBooks time entries. Supports OAuth2 authentication, interactive time logging with remembered defaults, and monthly entry listings.
 
+<img width="1093" height="454" alt="freshbooks-cli-screenshot" src="docs/images/screenshot.png" />
+
 ## Install
 
 ### Docker (no Ruby required)
@@ -13,7 +15,14 @@ git clone <repo-url> && cd freshbooks-cli
 
 The `./fb` wrapper script runs the CLI inside a Docker container. Data persists in `.fb/` in the project directory.
 
-### Ruby gem (native)
+### RubyGems
+
+```bash
+gem install freshbooks-cli
+fb auth
+```
+
+### Ruby gem (from source)
 
 ```bash
 gem build fb.gemspec
@@ -21,7 +30,7 @@ gem install freshbooks-cli-*.gem
 fb auth
 ```
 
-Installs `fb` to your PATH — runs natively, no Docker involved. Data stored in `~/.fb/`.
+Both install `fb` to your PATH — runs natively, no Docker involved. Data stored in `~/.fb/`.
 
 ## Setup
 
