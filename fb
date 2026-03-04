@@ -6,4 +6,7 @@ cd "$SCRIPT_DIR"
 
 mkdir -p .fb
 
+# Pass host timezone to Docker container
+export TZ="${TZ:-$(cat /etc/timezone 2>/dev/null || date +%Z)}"
+
 DOCKER_CLI_HINTS=false docker compose run --rm fb "$@" 2> >(grep -v "No services to build\|Container\|Network\|Volume" >&2)

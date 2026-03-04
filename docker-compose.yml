@@ -5,3 +5,5 @@ services:
     tty: true
     volumes:
       - ./.fb:/root/.fb
+    environment:
+      - TZ=${TZ:-UTC}
