@@ -311,6 +311,25 @@ module FB
       print_table(["ID", "Date", "Client", "Project", "Service", "Note", "Duration"], rows, wrap_col: 5)
 
       total = entries.sum { |e| e["duration"].to_i } / 3600.0
+
+      # Per-client breakdown
+      by_client = entries.group_by { |e| maps[:clients][e["client_id"].to_s] || e["client_id"].to_s }
+      if by_client.length > 1
+        puts "\nBy client:"
+        by_client.sort_by { |_, es| -es.sum { |e| e["duration"].to_i } }.each do |name, es|
+          puts "  #{name}: #{(es.sum { |e| e["duration"].to_i } / 3600.0).round(2)}h"
+        end
+      end
+
+      # Per-service breakdown
+      by_service = entries.group_by { |e| maps[:services][e["service_id"].to_s] || "-" }
+      if by_service.length > 1
+        puts "\nBy service:"
+        by_service.sort_by { |_, es| -es.sum { |e| e["duration"].to_i } }.each do |name, es|
+          puts "  #{name}: #{(es.sum { |e| e["duration"].to_i } / 3600.0).round(2)}h"
+        end
+      end
+
       puts "\nTotal: #{total.round(2)}h"
     end
 
