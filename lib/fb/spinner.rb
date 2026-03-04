@@ -4,10 +4,21 @@ module FB
   module Spinner
     FRAMES = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
+    @interactive = nil
+
+    def self.interactive=(value)
+      @interactive = value
+    end
+
+    def self.interactive?
+      return @interactive unless @interactive.nil?
+      $stderr.tty?
+    end
+
     def self.spin(message)
       result = nil
 
-      unless $stderr.tty?
+      unless interactive?
         result = yield
         return result
       end

@@ -12,7 +12,15 @@ module FB
     end
 
     class_option :no_interactive, type: :boolean, default: false, desc: "Disable interactive prompts (auto-detected when not a TTY)"
+    class_option :interactive, type: :boolean, default: false, desc: "Force interactive mode even when not a TTY"
     class_option :format, type: :string, desc: "Output format: table (default) or json"
+
+    no_commands do
+      def invoke_command(command, *args)
+        Spinner.interactive = interactive?
+        super
+      end
+    end
 
     # --- version ---
 
@@ -587,6 +595,7 @@ module FB
 
     def interactive?
       return false if options[:no_interactive]
+      return true if options[:interactive]
       $stdin.tty?
     end
 
