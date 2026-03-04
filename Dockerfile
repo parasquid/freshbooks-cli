@@ -6,5 +6,6 @@ WORKDIR /app
 
 COPY . .
 RUN gem build fb.gemspec && gem install freshbooks-cli-*.gem
+RUN gem install rspec rspec-given webmock
 
 ENTRYPOINT ["fb"]
