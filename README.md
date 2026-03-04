@@ -50,27 +50,69 @@ Running any command for the first time triggers setup:
 
 All data is stored in `~/.fb/` (or `.fb/` in the project directory when using Docker).
 
+## Interactive vs Non-interactive Mode
+
+The CLI auto-detects whether it's running in a terminal:
+
+- **Interactive** (`$stdin.tty?` is true): Prompts for missing values, shows selection menus
+- **Non-interactive** (piped input, agents, CI): Never prompts — uses flags, sane defaults, or aborts with clear errors
+
+You can force non-interactive mode with `--no-interactive`.
+
+**Non-interactive defaults:**
+- Single client/project → auto-selected
+- Multiple clients without `--client` → aborts with list of available clients
+- Missing `--duration` or `--note` → aborts with "Missing required flag"
+- `--date` → defaults to today
+- Project/service → optional, auto-selected if single
+
 ## Commands
 
 ### `fb auth`
 
-Authenticate with FreshBooks. Prints an authorization URL, waits for you to paste the redirect URL, then exchanges the code for tokens.
+Authenticate with FreshBooks. When run interactively (no subcommand), walks through the full OAuth flow.
 
 ```
 $ fb auth
 Open this URL in your browser:
-
   https://auth.freshbooks.com/oauth/authorize?client_id=...
-
 Paste the redirect URL: https://localhost?code=abc123
-
 Authentication successful!
 Business: Acme Inc
-  business_id: 12345
-  account_id: 67890
 ```
 
-Tokens auto-refresh before every API call — no need to re-auth unless you revoke app access. If you run any command without being authenticated, the auth flow starts automatically.
+#### Auth subcommands (for agents/scripts)
+
+```bash
+# Save OAuth credentials
+fb auth setup --client-id YOUR_ID --client-secret YOUR_SECRET
+
+# Get the authorization URL
+fb auth url                    # prints URL to stdout
+fb auth url --format json      # {"url": "..."}
+
+# Exchange OAuth code after user authorizes
+fb auth callback "https://localhost?code=abc123"
+# Single business: auto-selected
+# Multiple businesses: prints list, use `fb business --select ID`
+
+# Check current auth state
+fb auth status                 # human-readable
+fb auth status --format json   # structured output
+```
+
+Tokens auto-refresh before every API call — no need to re-auth unless you revoke app access.
+
+### `fb business`
+
+List or select the active business. Required when your FreshBooks account has multiple businesses.
+
+```bash
+fb business                    # List all businesses (marks active)
+fb business --format json      # JSON output
+fb business --select ID        # Set active business by ID
+fb business --select           # Interactive picker
+```
 
 ### `fb log`
 
@@ -112,6 +154,7 @@ Time entry created!
 
 ```bash
 fb log --client "Acme Corp" --project "Website Redesign" --duration 2.5 --note "Built API endpoints" --yes
+fb log --client "Acme Corp" --duration 2.5 --note "Work" --yes --format json  # JSON output with entry ID
 ```
 
 ### `fb entries`
@@ -120,8 +163,6 @@ List time entries. Defaults to the current month.
 
 ```
 $ fb entries
-✓ Fetching time entries (2026-03-01 to 2026-03-31)
-✓ Resolving names
 ID      Date        Client      Project           Note                 Duration
 ------  ----------  ----------  ----------------  -------------------  --------
 12345   2026-03-01  Acme Corp   Website Redesign  Design review        1.5h
@@ -145,34 +186,17 @@ fb entries --format json               # Machine-readable output
 
 List all clients on your FreshBooks account.
 
-```
-$ fb clients
-✓ Fetching clients
-Name        Email             Organization
-----------  ----------------  ------------
-Acme Corp   joe@acme.com      Acme Corp
-Jane Doe    jane@example.com  -
-```
-
 ```bash
-fb clients --format json    # Machine-readable output
+fb clients                 # Table output
+fb clients --format json   # Machine-readable output
 ```
 
 ### `fb projects`
 
 List all projects. Optionally filter by client.
 
-```
-$ fb projects
-✓ Resolving names
-✓ Fetching projects
-Title             Client      Status
-----------------  ----------  ------
-Website Redesign  Acme Corp   active
-Mobile App        Acme Corp   active
-```
-
 ```bash
+fb projects                        # All projects
 fb projects --client "Acme Corp"   # Filter by client name
 fb projects --format json          # Machine-readable output
 ```
@@ -181,18 +205,9 @@ fb projects --format json          # Machine-readable output
 
 List all services.
 
-```
-$ fb services
-✓ Fetching services
-Name          Billable
-------------  --------
-Development   yes
-Design        yes
-Meetings      no
-```
-
 ```bash
-fb services --format json   # Machine-readable output
+fb services                # Table output
+fb services --format json  # Machine-readable output
 ```
 
 ### `fb status`
@@ -201,8 +216,6 @@ Show an hours summary for today, this week, and this month — grouped by client
 
 ```
 $ fb status
-✓ Fetching time entries
-✓ Resolving names
 
 Today (2026-03-04)
   Acme Corp / Website Redesign: 2.5h
@@ -218,6 +231,10 @@ This Month (2026-03-01 to 2026-03-04)
   Total: 16.0h
 ```
 
+```bash
+fb status --format json   # Structured JSON with entries and totals
+```
+
 ### `fb delete`
 
 Delete a time entry. Interactive by default — shows today's entries for selection. Use `--id` to skip the picker.
@@ -226,6 +243,7 @@ Delete a time entry. Interactive by default — shows today's entries for select
 fb delete                  # Interactive — pick from today's entries
 fb delete --id 12345       # Delete specific entry (prompts for confirmation)
 fb delete --id 12345 --yes # Skip confirmation
+fb delete --id 12345 --yes --format json  # JSON output: {"id": 12345, "deleted": true}
 ```
 
 ### `fb edit`
@@ -238,6 +256,7 @@ fb edit --id 12345                   # Edit specific entry interactively
 fb edit --id 12345 --duration 1.5 --yes  # Scripted — update duration, skip confirmation
 fb edit --id 12345 --note "Updated note" --date 2026-03-01 --yes
 fb edit --id 12345 --client "Globex Inc" --project "Mobile App" --yes
+fb edit --id 12345 --duration 2 --yes --format json  # JSON output
 ```
 
 ### `fb cache`
@@ -247,6 +266,7 @@ Manage the local data cache. Clients, projects, and services are cached for 10 m
 ```bash
 fb cache              # Show cache status (default)
 fb cache status       # Same — show age and item counts
+fb cache status --format json  # JSON output
 fb cache refresh      # Force-refresh all cached data
 fb cache clear        # Delete the cache file
 ```
@@ -260,13 +280,32 @@ fb help --format json  # Machine-readable JSON (for agents/scripts)
 
 ## Agent/script usage
 
-The CLI is designed to be scriptable:
+The CLI is designed to be fully scriptable. All commands support `--format json` for structured output.
 
-- `fb help --format json` — discover all commands and flags
-- `fb log --client "..." --duration 2.5 --note "..." --yes` — fully non-interactive
-- `fb entries --format json` — structured output (includes entry IDs)
-- `fb clients --format json` / `fb projects --format json` / `fb services --format json` — list resources
-- `fb edit --id <ID> --duration 1.5 --yes` — edit without prompts
-- `fb delete --id <ID> --yes` — delete without prompts
-- `fb status` — quick hours overview
-- `fb cache refresh` — pre-warm the cache
+**Full agent auth flow:**
+
+```bash
+# 1. Save credentials
+fb auth setup --client-id YOUR_ID --client-secret YOUR_SECRET
+
+# 2. Get OAuth URL (present to user)
+fb auth url
+
+# 3. After user authorizes, exchange the code
+fb auth callback "https://localhost?code=abc123"
+
+# 4. If multiple businesses, select one
+fb business --select 12345
+
+# 5. Start using the API
+fb log --client "Acme Corp" --duration 2.5 --note "Work" --yes --format json
+fb entries --format json
+fb status --format json
+```
+
+**Key flags for agents:**
+- `--yes` — skip all confirmation prompts
+- `--format json` — structured output on all commands
+- `--no-interactive` — explicit non-interactive mode (also auto-detected)
+- `--id` — required for edit/delete in non-interactive mode
+- `--client`, `--duration`, `--note` — required for log in non-interactive mode (with multiple clients)
