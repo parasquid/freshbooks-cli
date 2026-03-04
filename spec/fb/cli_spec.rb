@@ -120,6 +120,448 @@ RSpec.describe FB::Cli do
     end
   end
 
+  # --- clients ---
+
+  describe "clients" do
+    let(:clients_url) { %r{api\.freshbooks\.com/accounting/account/acc99/users/clients} }
+
+    context "table output" do
+      Given {
+        stub_request(:get, clients_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "clients" => [
+                  { "id" => 10, "organization" => "Acme Corp", "fname" => "J", "lname" => "D", "email" => "j@acme.com" },
+                  { "id" => 11, "organization" => "", "fname" => "Jane", "lname" => "Doe", "email" => "jane@example.com" }
+                ],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+      }
+      When(:output) { capture_stdout { FB::Cli.start(["clients"]) } }
+      Then { output.include?("Acme Corp") }
+      And  { output.include?("Jane Doe") }
+      And  { output.include?("j@acme.com") }
+    end
+
+    context "json output" do
+      Given {
+        stub_request(:get, clients_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "clients" => [{ "id" => 10, "organization" => "Acme Corp" }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+      }
+      When(:output) { capture_stdout { FB::Cli.start(["clients", "--format", "json"]) } }
+      Then { JSON.parse(output).first["organization"] == "Acme Corp" }
+    end
+
+    context "empty" do
+      Given {
+        stub_request(:get, clients_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "clients" => [], "meta" => { "pages" => 1 } } }.to_json
+          )
+      }
+      When(:output) { capture_stdout { FB::Cli.start(["clients"]) } }
+      Then { output.include?("No clients found.") }
+    end
+  end
+
+  # --- projects ---
+
+  describe "projects" do
+    let(:clients_url) { %r{api\.freshbooks\.com/accounting/account/acc99/users/clients} }
+    let(:projects_url) { %r{api\.freshbooks\.com/projects/business/12345/projects} }
+    let(:services_url) { %r{api\.freshbooks\.com/comments/business/12345/services} }
+
+    before do
+      stub_request(:get, clients_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "result" => {
+              "clients" => [{ "id" => 10, "organization" => "Acme Corp", "fname" => "J", "lname" => "D" }],
+              "meta" => { "pages" => 1, "page" => 1 }
+            }
+          }.to_json
+        )
+      stub_request(:get, services_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: { "result" => { "services" => {} } }.to_json
+        )
+    end
+
+    context "table output" do
+      Given {
+        stub_request(:get, projects_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "projects" => [{ "id" => 20, "title" => "Website Redesign", "client_id" => 10, "active" => true }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+      }
+      When(:output) { capture_stdout { FB::Cli.start(["projects"]) } }
+      Then { output.include?("Website Redesign") }
+      And  { output.include?("Acme Corp") }
+      And  { output.include?("active") }
+    end
+
+    context "with --client filter" do
+      Given {
+        stub_request(:get, projects_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "projects" => [
+                  { "id" => 20, "title" => "Website Redesign", "client_id" => 10, "active" => true },
+                  { "id" => 21, "title" => "Other Project", "client_id" => 99, "active" => true }
+                ],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+      }
+      When(:output) { capture_stdout { FB::Cli.start(["projects", "--client", "Acme Corp"]) } }
+      Then { output.include?("Website Redesign") }
+      And  { !output.include?("Other Project") }
+    end
+  end
+
+  # --- services ---
+
+  describe "services" do
+    let(:services_url) { %r{api\.freshbooks\.com/comments/business/12345/services} }
+
+    context "table output" do
+      Given {
+        stub_request(:get, services_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "services" => {
+                  "1" => { "id" => 1, "name" => "Development", "billable" => true },
+                  "2" => { "id" => 2, "name" => "Design", "billable" => false }
+                }
+              }
+            }.to_json
+          )
+      }
+      When(:output) { capture_stdout { FB::Cli.start(["services"]) } }
+      Then { output.include?("Development") }
+      And  { output.include?("yes") }
+      And  { output.include?("Design") }
+      And  { output.include?("no") }
+    end
+
+    context "json output" do
+      Given {
+        stub_request(:get, services_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "services" => { "1" => { "id" => 1, "name" => "Development", "billable" => true } }
+              }
+            }.to_json
+          )
+      }
+      When(:output) { capture_stdout { FB::Cli.start(["services", "--format", "json"]) } }
+      Then { JSON.parse(output).first["name"] == "Development" }
+    end
+  end
+
+  # --- status ---
+
+  describe "status" do
+    let(:time_entries_url) { %r{api\.freshbooks\.com/timetracking/business/12345/time_entries} }
+    let(:clients_url) { %r{api\.freshbooks\.com/accounting/account/acc99/users/clients} }
+    let(:projects_url) { %r{api\.freshbooks\.com/projects/business/12345/projects} }
+    let(:services_url) { %r{api\.freshbooks\.com/comments/business/12345/services} }
+
+    context "with entries" do
+      Given {
+        today = Date.today.to_s
+        stub_request(:get, time_entries_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "time_entries" => [
+                  { "id" => 1, "client_id" => 10, "project_id" => 20, "duration" => 3600, "started_at" => today }
+                ],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, clients_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "clients" => [{ "id" => 10, "organization" => "Acme Corp", "fname" => "J", "lname" => "D" }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, projects_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "projects" => [{ "id" => 20, "title" => "Website" }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, services_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "services" => {} } }.to_json
+          )
+      }
+      When(:output) { capture_stdout { FB::Cli.start(["status"]) } }
+      Then { output.include?("Today") }
+      And  { output.include?("This Week") }
+      And  { output.include?("This Month") }
+      And  { output.include?("Acme Corp / Website") }
+      And  { output.include?("1.0h") }
+    end
+  end
+
+  # --- delete ---
+
+  describe "delete" do
+    let(:time_entries_url) { %r{api\.freshbooks\.com/timetracking/business/12345/time_entries} }
+
+    context "with --id and --yes" do
+      Given {
+        stub_request(:delete, %r{api\.freshbooks\.com/timetracking/business/12345/time_entries/999})
+          .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: "")
+      }
+      When(:output) {
+        capture_stdout { FB::Cli.start(["delete", "--id", "999", "--yes"]) }
+      }
+      Then { output.include?("Time entry 999 deleted.") }
+    end
+
+    context "with --id and confirmation denied" do
+      Given {
+        allow($stdin).to receive(:gets).and_return("n\n")
+      }
+      When(:result) {
+        capture_stdout { FB::Cli.start(["delete", "--id", "999"]) }
+      }
+      Then { result == Failure(SystemExit) }
+    end
+  end
+
+  # --- edit ---
+
+  describe "edit" do
+    let(:entry_url) { %r{api\.freshbooks\.com/timetracking/business/12345/time_entries/999} }
+    let(:clients_url) { %r{api\.freshbooks\.com/accounting/account/acc99/users/clients} }
+    let(:projects_url) { %r{api\.freshbooks\.com/projects/business/12345/projects} }
+    let(:services_url) { %r{api\.freshbooks\.com/comments/business/12345/services} }
+
+    context "scripted with --id, --duration, --yes" do
+      Given {
+        stub_request(:get, entry_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "time_entry" => { "id" => 999, "duration" => 3600, "note" => "Old note",
+                                  "started_at" => "2024-03-01", "client_id" => 10, "project_id" => 20 }
+              }
+            }.to_json
+          )
+        stub_request(:put, entry_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "time_entry" => { "id" => 999, "duration" => 5400 } } }.to_json
+          )
+        stub_request(:get, clients_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "clients" => [{ "id" => 10, "organization" => "Acme", "fname" => "J", "lname" => "D" }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, projects_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "projects" => [{ "id" => 20, "title" => "Website" }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, services_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "services" => {} } }.to_json
+          )
+      }
+      When(:output) {
+        capture_stdout { FB::Cli.start(["edit", "--id", "999", "--duration", "1.5", "--yes"]) }
+      }
+      Then { output.include?("Time entry 999 updated.") }
+      And  { output.include?("Edit Summary") }
+    end
+  end
+
+  # --- cache ---
+
+  describe "cache" do
+    context "status with no cache" do
+      When(:output) { capture_stdout { FB::Cli.start(["cache", "status"]) } }
+      Then { output.include?("No cache data.") }
+    end
+
+    context "status with existing cache" do
+      Given {
+        FB::Auth.save_cache(
+          "updated_at" => Time.now.to_i - 30,
+          "clients_data" => [{ "id" => 1 }],
+          "projects_data" => [{ "id" => 2 }, { "id" => 3 }],
+          "services_data" => []
+        )
+      }
+      When(:output) { capture_stdout { FB::Cli.start(["cache", "status"]) } }
+      Then { output.include?("fresh") }
+      And  { output.include?("Clients: 1") }
+      And  { output.include?("Projects: 2") }
+    end
+
+    context "clear with existing cache" do
+      Given {
+        FB::Auth.save_cache("updated_at" => Time.now.to_i)
+      }
+      When(:output) { capture_stdout { FB::Cli.start(["cache", "clear"]) } }
+      Then { output.include?("Cache cleared.") }
+      And  { !File.exist?(FB::Auth.cache_path) }
+    end
+
+    context "clear with no cache" do
+      When(:output) { capture_stdout { FB::Cli.start(["cache", "clear"]) } }
+      Then { output.include?("No cache file found.") }
+    end
+  end
+
+  # --- entries with ID column ---
+
+  describe "entries table includes ID column" do
+    let(:time_entries_url) { %r{api\.freshbooks\.com/timetracking/business/12345/time_entries} }
+    let(:clients_url) { %r{api\.freshbooks\.com/accounting/account/acc99/users/clients} }
+    let(:projects_url) { %r{api\.freshbooks\.com/projects/business/12345/projects} }
+    let(:services_url) { %r{api\.freshbooks\.com/comments/business/12345/services} }
+
+    context "table output shows ID" do
+      Given {
+        stub_request(:get, time_entries_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "time_entries" => [
+                  { "id" => 42, "client_id" => 10, "project_id" => 20, "duration" => 3600,
+                    "started_at" => "2024-03-01", "note" => "Work" }
+                ],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, clients_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "clients" => [{ "id" => 10, "organization" => "Acme", "fname" => "J", "lname" => "D" }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, projects_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "projects" => [{ "id" => 20, "title" => "Website" }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, services_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "services" => {} } }.to_json
+          )
+      }
+      When(:output) {
+        capture_stdout { FB::Cli.start(["entries", "--from", "2024-03-01", "--to", "2024-03-31"]) }
+      }
+      Then { output.include?("ID") }
+      And  { output.include?("42") }
+    end
+  end
+
+  # --- help --format json includes new commands ---
+
+  describe "help --format json includes new commands" do
+    When(:output) {
+      capture_stdout { FB::Cli.start(["help", "--format", "json"]) }
+    }
+    Then {
+      json = JSON.parse(output)
+      cmds = json["commands"]
+      cmds.key?("clients") && cmds.key?("projects") && cmds.key?("services") &&
+        cmds.key?("status") && cmds.key?("delete") && cmds.key?("edit") && cmds.key?("cache")
+    }
+  end
+
   # --- display_name ---
 
   describe "#display_name (via entries table output)" do

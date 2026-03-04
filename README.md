@@ -1,6 +1,6 @@
 # FreshBooks CLI (`fb`)
 
-A command-line tool for managing FreshBooks time entries. Supports OAuth2 authentication, interactive time logging with remembered defaults, and monthly entry listings.
+A command-line tool for managing FreshBooks time tracking. Supports OAuth2 authentication, interactive time logging with remembered defaults, entry listings, client/project/service browsing, hours summaries, and inline editing and deletion of entries.
 
 <img width="1093" height="454" alt="freshbooks-cli-screenshot" src="docs/images/screenshot.png" />
 
@@ -122,10 +122,10 @@ List time entries. Defaults to the current month.
 $ fb entries
 ✓ Fetching time entries (2026-03-01 to 2026-03-31)
 ✓ Resolving names
-Date                  Client      Project           Note                        Duration
---------------------  ----------  ----------------  --------------------------  --------
-2026-03-01T00:00:00Z  Acme Corp   Website Redesign  Design review               1.5h
-2026-03-03T00:00:00Z  Acme Corp   Website Redesign  Built API endpoints         2.5h
+ID      Date        Client      Project           Note                 Duration
+------  ----------  ----------  ----------------  -------------------  --------
+12345   2026-03-01  Acme Corp   Website Redesign  Design review        1.5h
+12346   2026-03-03  Acme Corp   Website Redesign  Built API endpoints  2.5h
 
 Total: 4.0h
 ```
@@ -141,6 +141,116 @@ fb entries --month 2 --year 2026       # Shorthand for a whole month
 fb entries --format json               # Machine-readable output
 ```
 
+### `fb clients`
+
+List all clients on your FreshBooks account.
+
+```
+$ fb clients
+✓ Fetching clients
+Name        Email             Organization
+----------  ----------------  ------------
+Acme Corp   joe@acme.com      Acme Corp
+Jane Doe    jane@example.com  -
+```
+
+```bash
+fb clients --format json    # Machine-readable output
+```
+
+### `fb projects`
+
+List all projects. Optionally filter by client.
+
+```
+$ fb projects
+✓ Resolving names
+✓ Fetching projects
+Title             Client      Status
+----------------  ----------  ------
+Website Redesign  Acme Corp   active
+Mobile App        Acme Corp   active
+```
+
+```bash
+fb projects --client "Acme Corp"   # Filter by client name
+fb projects --format json          # Machine-readable output
+```
+
+### `fb services`
+
+List all services.
+
+```
+$ fb services
+✓ Fetching services
+Name          Billable
+------------  --------
+Development   yes
+Design        yes
+Meetings      no
+```
+
+```bash
+fb services --format json   # Machine-readable output
+```
+
+### `fb status`
+
+Show an hours summary for today, this week, and this month — grouped by client and project.
+
+```
+$ fb status
+✓ Fetching time entries
+✓ Resolving names
+
+Today (2026-03-04)
+  Acme Corp / Website Redesign: 2.5h
+  Total: 2.5h
+
+This Week (2026-03-03 to 2026-03-04)
+  Acme Corp / Website Redesign: 6.0h
+  Total: 6.0h
+
+This Month (2026-03-01 to 2026-03-04)
+  Acme Corp / Website Redesign: 12.0h
+  Globex Inc / Mobile App: 4.0h
+  Total: 16.0h
+```
+
+### `fb delete`
+
+Delete a time entry. Interactive by default — shows today's entries for selection. Use `--id` to skip the picker.
+
+```bash
+fb delete                  # Interactive — pick from today's entries
+fb delete --id 12345       # Delete specific entry (prompts for confirmation)
+fb delete --id 12345 --yes # Skip confirmation
+```
+
+### `fb edit`
+
+Edit a time entry. Fetches the entry, shows current values as defaults, and lets you change any field. Use flags for non-interactive/scripted usage.
+
+```bash
+fb edit                              # Interactive — pick entry, edit fields
+fb edit --id 12345                   # Edit specific entry interactively
+fb edit --id 12345 --duration 1.5 --yes  # Scripted — update duration, skip confirmation
+fb edit --id 12345 --note "Updated note" --date 2026-03-01 --yes
+fb edit --id 12345 --client "Globex Inc" --project "Mobile App" --yes
+```
+
+### `fb cache`
+
+Manage the local data cache. Clients, projects, and services are cached for 10 minutes to speed up commands.
+
+```bash
+fb cache              # Show cache status (default)
+fb cache status       # Same — show age and item counts
+fb cache refresh      # Force-refresh all cached data
+fb cache clear        # Delete the cache file
+```
+
 ### `fb help`
 
 ```bash
@@ -154,4 +264,9 @@ The CLI is designed to be scriptable:
 
 - `fb help --format json` — discover all commands and flags
 - `fb log --client "..." --duration 2.5 --note "..." --yes` — fully non-interactive
-- `fb entries --format json` — structured output
+- `fb entries --format json` — structured output (includes entry IDs)
+- `fb clients --format json` / `fb projects --format json` / `fb services --format json` — list resources
+- `fb edit --id <ID> --duration 1.5 --yes` — edit without prompts
+- `fb delete --id <ID> --yes` — delete without prompts
+- `fb status` — quick hours overview
+- `fb cache refresh` — pre-warm the cache

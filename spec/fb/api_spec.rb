@@ -87,6 +87,7 @@ RSpec.describe FB::Api do
   describe ".build_name_maps" do
     let(:clients_url) { %r{api\.freshbooks\.com/accounting/account/acc99/users/clients} }
     let(:projects_url) { %r{api\.freshbooks\.com/projects/business/12345/projects} }
+    let(:services_url) { %r{api\.freshbooks\.com/comments/business/12345/services} }
 
     context "with stale or no cache" do
       Given {
@@ -113,10 +114,18 @@ RSpec.describe FB::Api do
               }
             }.to_json
           )
+
+        stub_request(:get, %r{api\.freshbooks\.com/comments/business/12345/services})
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "services" => { "30" => { "id" => 30, "name" => "Dev" } } } }.to_json
+          )
       }
       When(:result) { FB::Api.build_name_maps }
       Then { result[:clients]["10"] == "Acme Corp" }
       And  { result[:projects]["20"] == "Website Redesign" }
+      And  { result[:services]["30"] == "Dev" }
     end
 
     context "with fresh cache (< 10 min old)" do
@@ -134,6 +143,116 @@ RSpec.describe FB::Api do
         assert_not_requested(:get, %r{api\.freshbooks\.com})
         true
       }
+    end
+  end
+
+  # --- fetch_time_entry ---
+
+  describe ".fetch_time_entry" do
+    Given {
+      stub_request(:get, %r{api\.freshbooks\.com/timetracking/business/12345/time_entries/999})
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "result" => {
+              "time_entry" => { "id" => 999, "duration" => 7200, "note" => "Test" }
+            }
+          }.to_json
+        )
+    }
+    When(:result) { FB::Api.fetch_time_entry(999) }
+    Then { result["id"] == 999 }
+    And  { result["duration"] == 7200 }
+  end
+
+  # --- update_time_entry ---
+
+  describe ".update_time_entry" do
+    Given {
+      stub_request(:put, %r{api\.freshbooks\.com/timetracking/business/12345/time_entries/999})
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "result" => {
+              "time_entry" => { "id" => 999, "duration" => 5400, "note" => "Updated" }
+            }
+          }.to_json
+        )
+    }
+    When(:result) { FB::Api.update_time_entry(999, { "duration" => 5400, "note" => "Updated" }) }
+    Then { result["result"]["time_entry"]["note"] == "Updated" }
+  end
+
+  # --- delete_time_entry ---
+
+  describe ".delete_time_entry" do
+    Given {
+      stub_request(:delete, %r{api\.freshbooks\.com/timetracking/business/12345/time_entries/999})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: "")
+    }
+    When(:result) { FB::Api.delete_time_entry(999) }
+    Then { result == true }
+  end
+
+  # --- caching ---
+
+  describe "caching" do
+    let(:clients_url) { %r{api\.freshbooks\.com/accounting/account/acc99/users/clients} }
+
+    context "fetch_clients returns cached data when fresh" do
+      Given {
+        FB::Auth.save_cache(
+          "updated_at" => Time.now.to_i - 60,
+          "clients_data" => [{ "id" => 10, "organization" => "Cached" }]
+        )
+      }
+      When(:result) { FB::Api.fetch_clients }
+      Then { result.first["organization"] == "Cached" }
+      And  {
+        assert_not_requested(:get, clients_url)
+        true
+      }
+    end
+
+    context "fetch_clients hits API when force: true" do
+      Given {
+        FB::Auth.save_cache(
+          "updated_at" => Time.now.to_i - 60,
+          "clients_data" => [{ "id" => 10, "organization" => "Cached" }]
+        )
+        stub_request(:get, clients_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "clients" => [{ "id" => 10, "organization" => "Fresh" }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+      }
+      When(:result) { FB::Api.fetch_clients(force: true) }
+      Then { result.first["organization"] == "Fresh" }
+    end
+  end
+
+  # --- build_name_maps with services ---
+
+  describe ".build_name_maps with services" do
+    context "with fresh cache including services" do
+      Given {
+        FB::Auth.save_cache(
+          "updated_at" => Time.now.to_i - 60,
+          "clients" => { "10" => "Client" },
+          "projects" => { "20" => "Project" },
+          "services" => { "30" => "Development" }
+        )
+      }
+      When(:result) { FB::Api.build_name_maps }
+      Then { result[:services]["30"] == "Development" }
     end
   end
 

@@ -71,18 +71,52 @@ module FB
         all_items
       end
 
+      # --- Cache helpers ---
+
+      def cache_fresh?
+        cache = Auth.load_cache
+        cache["updated_at"] && (Time.now.to_i - cache["updated_at"]) < 600
+      end
+
+      def cached_data(key)
+        cache = Auth.load_cache
+        return nil unless cache["updated_at"] && (Time.now.to_i - cache["updated_at"]) < 600
+        cache[key]
+      end
+
+      def update_cache(key, data)
+        cache = Auth.load_cache
+        cache["updated_at"] = Time.now.to_i
+        cache[key] = data
+        Auth.save_cache(cache)
+      end
+
       # --- Clients ---
 
-      def fetch_clients
+      def fetch_clients(force: false)
+        unless force
+          cached = cached_data("clients_data")
+          return cached if cached
+        end
+
         url = "#{BASE}/accounting/account/#{account_id}/users/clients"
-        fetch_all_pages(url, "clients")
+        results = fetch_all_pages(url, "clients")
+        update_cache("clients_data", results)
+        results
       end
 
       # --- Projects ---
 
-      def fetch_projects
+      def fetch_projects(force: false)
+        unless force
+          cached = cached_data("projects_data")
+          return cached if cached
+        end
+
         url = "#{BASE}/projects/business/#{business_id}/projects"
-        fetch_all_pages(url, "projects")
+        results = fetch_all_pages(url, "projects")
+        update_cache("projects_data", results)
+        results
       end
 
       def fetch_projects_for_client(client_id)
@@ -92,7 +126,12 @@ module FB
 
       # --- Services ---
 
-      def fetch_services
+      def fetch_services(force: false)
+        unless force
+          cached = cached_data("services_data")
+          return cached if cached
+        end
+
         url = "#{BASE}/comments/business/#{business_id}/services"
         response = HTTParty.get(url, { headers: headers })
 
@@ -104,7 +143,9 @@ module FB
 
         data = response.parsed_response
         services_hash = data.dig("result", "services") || {}
-        services_hash.values
+        results = services_hash.values
+        update_cache("services_data", results)
+        results
       end
 
       # --- Time Entries ---
@@ -115,6 +156,20 @@ module FB
         params["started_from"] = "#{started_from}T00:00:00Z" if started_from
         params["started_to"] = "#{started_to}T23:59:59Z" if started_to
         fetch_all_pages(url, "time_entries", params: params)
+      end
+
+      def fetch_time_entry(entry_id)
+        url = "#{BASE}/timetracking/business/#{business_id}/time_entries/#{entry_id}"
+        response = HTTParty.get(url, { headers: headers })
+
+        unless response.success?
+          body = response.parsed_response
+          msg = extract_error(body) || response.body
+          abort("API error: #{msg}")
+        end
+
+        data = response.parsed_response
+        data.dig("result", "time_entry") || data.dig("time_entry")
       end
 
       def create_time_entry(entry)
@@ -135,6 +190,38 @@ module FB
         response.parsed_response
       end
 
+      def update_time_entry(entry_id, fields)
+        url = "#{BASE}/timetracking/business/#{business_id}/time_entries/#{entry_id}"
+        body = { time_entry: fields }
+
+        response = HTTParty.put(url, {
+          headers: headers,
+          body: body.to_json
+        })
+
+        unless response.success?
+          body = response.parsed_response
+          msg = extract_error(body) || response.body
+          abort("API error: #{msg}")
+        end
+
+        response.parsed_response
+      end
+
+      def delete_time_entry(entry_id)
+        url = "#{BASE}/timetracking/business/#{business_id}/time_entries/#{entry_id}"
+
+        response = HTTParty.delete(url, { headers: headers })
+
+        unless response.success?
+          body = response.parsed_response
+          msg = extract_error(body) || response.body
+          abort("API error: #{msg}")
+        end
+
+        true
+      end
+
       # --- Name Resolution (for entries display) ---
 
       def build_name_maps
@@ -144,12 +231,14 @@ module FB
         if cache["updated_at"] && (now - cache["updated_at"]) < 600
           return {
             clients: (cache["clients"] || {}),
-            projects: (cache["projects"] || {})
+            projects: (cache["projects"] || {}),
+            services: (cache["services"] || {})
           }
         end
 
-        clients = fetch_clients
-        projects = fetch_projects
+        clients = fetch_clients(force: true)
+        projects = fetch_projects(force: true)
+        services = fetch_services(force: true)
 
         client_map = {}
         clients.each do |c|
@@ -163,14 +252,19 @@ module FB
           project_map[p["id"].to_s] = p["title"]
         end
 
-        cache_data = {
-          "updated_at" => now,
-          "clients" => client_map,
-          "projects" => project_map
-        }
-        Auth.save_cache(cache_data)
+        service_map = {}
+        services.each do |s|
+          service_map[s["id"].to_s] = s["name"]
+        end
 
-        { clients: client_map, projects: project_map }
+        cache = Auth.load_cache
+        cache["updated_at"] = now
+        cache["clients"] = client_map
+        cache["projects"] = project_map
+        cache["services"] = service_map
+        Auth.save_cache(cache)
+
+        { clients: client_map, projects: project_map, services: service_map }
       end
 
       private
