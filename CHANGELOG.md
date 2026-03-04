@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-04
+
+### Added
+- `fb business` command to list and select active business
+- `fb auth` subcommands for non-interactive auth: `setup`, `url`, `callback`, `status`
+- Interactive detection via `$stdin.tty?` + `--no-interactive` flag
+- `--format json` on all mutation commands (`log`, `edit`, `delete`)
+- `--format json` on `status` and `cache status`
+- `--service` flag for `fb log` and `fb edit` (project-scoped services)
+- Service column in `fb entries` table output
+- Non-interactive mode: auto-selects single options, aborts with clear errors for ambiguous choices
+- Docker timezone pass-through from host
+- Claude Code skill for agent-driven time tracking
+
+### Fixed
+- `started_at` date format (API requires full datetime, not bare date)
+- `fb edit` now preserves all existing fields (API replaces entire entry on PUT)
+- `build_name_maps` extracts services from project data (global endpoint returns empty)
+- `fb cache status` correctly counts project-scoped services
+
 ## [0.2.1] - 2026-03-04
 
 ### Added
@@ -40,6 +60,7 @@ Initial release.
 - `help --format json` for machine-readable command documentation
 - Docker-based workflow with bind-mounted config directory
 
+[0.3.0]: https://github.com/parasquid/freshbooks-cli/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/parasquid/freshbooks-cli/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/parasquid/freshbooks-cli/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/parasquid/freshbooks-cli/releases/tag/v0.1.0
