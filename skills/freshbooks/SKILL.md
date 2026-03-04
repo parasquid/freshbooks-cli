@@ -46,7 +46,7 @@ When executing `fb` commands:
 - **Always** use `--id` for `edit` and `delete` commands
 - Parse JSON output to extract entry IDs, totals, and status
 
-**Important: Services are project-scoped.** `fb services` may return empty — services are embedded in project data. When logging time, use `--service "Name"` with the service name from the project (visible in `fb projects --format json` under the `services` array). Common service names: Development, Research, General, Meetings.
+**Important: Services are project-scoped and MUST always be specified when logging time.** `fb services` may return empty — services are embedded in project data. Use `--service "Name"` with the service name from the project (visible in `fb projects --format json` under the `services` array). Common service names: Development, Research, General, Meetings. Infer the service from context clues in the user's request (e.g. "development work" → "Development", "a meeting" → "Meetings"). If the service cannot be inferred, ask the user before logging.
 
 ## Command Reference
 
@@ -60,7 +60,9 @@ fb entries --from YYYY-MM-DD --to YYYY-MM-DD --format json  # Date range
 ### Log Time
 ```bash
 fb log --client "Client Name" --project "Project" --service "Service" --duration HOURS --note "Description" --yes --format json
-# --project, --service, --date are optional; --client, --duration, --note are required
+# --project, --date are optional; --client, --duration, --note, --service are required
+# IMPORTANT: Always include --service. Infer the service from context (e.g. "development work" → "Development",
+# "meeting" → "Meetings", "research" → "Research"). If unsure, ask the user. Never omit --service.
 ```
 
 ### Edit Entry
