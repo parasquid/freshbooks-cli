@@ -228,7 +228,8 @@ module FB
         cache = Auth.load_cache
         now = Time.now.to_i
 
-        if cache["updated_at"] && (now - cache["updated_at"]) < 600
+        if cache["updated_at"] && (now - cache["updated_at"]) < 600 &&
+           cache["clients"] && !cache["clients"].empty?
           return {
             clients: (cache["clients"] || {}),
             projects: (cache["projects"] || {}),
@@ -255,6 +256,13 @@ module FB
         service_map = {}
         services.each do |s|
           service_map[s["id"].to_s] = s["name"]
+        end
+
+        # Also collect services embedded in projects
+        projects.each do |p|
+          (p["services"] || []).each do |s|
+            service_map[s["id"].to_s] ||= s["name"]
+          end
         end
 
         cache = Auth.load_cache

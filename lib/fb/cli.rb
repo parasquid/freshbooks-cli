@@ -187,7 +187,7 @@ module FB
 
       client = select_client(defaults)
       project = select_project(client["id"], defaults)
-      service = select_service(defaults)
+      service = select_service(defaults, project)
       date = pick_date
       duration_hours = pick_duration
       note = pick_note
@@ -215,7 +215,7 @@ module FB
         "is_logged" => true,
         "duration" => (duration_hours * 3600).to_i,
         "note" => note,
-        "started_at" => date,
+        "started_at" => normalize_datetime(date),
         "client_id" => client["id"]
       }
       entry["project_id"] = project["id"] if project
@@ -293,12 +293,13 @@ module FB
         date = e["started_at"] || "?"
         client = maps[:clients][e["client_id"].to_s] || e["client_id"].to_s
         project = maps[:projects][e["project_id"].to_s] || "-"
+        service = maps[:services][e["service_id"].to_s] || "-"
         note = (e["note"] || "").slice(0, 50)
         hours = (e["duration"].to_i / 3600.0).round(2)
-        [e["id"].to_s, date, client, project, note, "#{hours}h"]
+        [e["id"].to_s, date, client, project, service, note, "#{hours}h"]
       end
 
-      print_table(["ID", "Date", "Client", "Project", "Note", "Duration"], rows)
+      print_table(["ID", "Date", "Client", "Project", "Service", "Note", "Duration"], rows)
 
       total = entries.sum { |e| e["duration"].to_i } / 3600.0
       puts "\nTotal: #{total.round(2)}h"
@@ -478,7 +479,8 @@ module FB
       abort("Time entry not found.") unless entry
 
       maps = Spinner.spin("Resolving names") { Api.build_name_maps }
-      scripted = options[:duration] || options[:note] || options[:date] || options[:client] || options[:project] || options[:service]
+      has_edit_flags = options[:duration] || options[:note] || options[:date] || options[:client] || options[:project] || options[:service]
+      scripted = has_edit_flags || !interactive?
 
       fields = build_edit_fields(entry, maps, scripted)
 
@@ -668,17 +670,28 @@ module FB
       projects[idx]
     end
 
-    def select_service(defaults)
+    def select_service(defaults, project = nil)
+      # Use project-scoped services if available, fall back to global
+      services = if project && project["services"] && !project["services"].empty?
+        project["services"]
+      else
+        Spinner.spin("Fetching services") { Api.fetch_services }
+      end
+
       if options[:service]
-        services = Spinner.spin("Fetching services") { Api.fetch_services }
         match = services.find { |s| s["name"].downcase == options[:service].downcase }
         abort("Service not found: #{options[:service]}") unless match
         return match
       end
 
-      return nil unless interactive?
+      unless interactive?
+        # Non-interactive: auto-select if single, use default if set, otherwise skip
+        default_service = services.find { |s| s["id"].to_i == defaults["service_id"].to_i }
+        return default_service if default_service
+        return services.first if services.length == 1
+        return nil
+      end
 
-      services = Spinner.spin("Fetching services") { Api.fetch_services }
       return nil if services.empty?
 
       puts "\nServices:\n\n"
@@ -812,12 +825,21 @@ module FB
     end
 
     def build_edit_fields(entry, maps, scripted)
-      fields = {}
+      # FreshBooks API replaces the entry — always include all current fields
+      fields = {
+        "started_at" => entry["started_at"],
+        "is_logged" => entry["is_logged"] || true,
+        "duration" => entry["duration"],
+        "note" => entry["note"],
+        "client_id" => entry["client_id"],
+        "project_id" => entry["project_id"],
+        "service_id" => entry["service_id"]
+      }
 
       if scripted
         fields["duration"] = (options[:duration] * 3600).to_i if options[:duration]
         fields["note"] = options[:note] if options[:note]
-        fields["started_at"] = options[:date] if options[:date]
+        fields["started_at"] = normalize_datetime(options[:date]) if options[:date]
 
         if options[:client]
           client_id = maps[:clients].find { |_id, name| name.downcase == options[:client].downcase }&.first
@@ -854,6 +876,11 @@ module FB
       end
 
       fields
+    end
+
+    def normalize_datetime(date_str)
+      return date_str if date_str.include?("T")
+      "#{date_str}T00:00:00Z"
     end
 
     def display_name(client)
