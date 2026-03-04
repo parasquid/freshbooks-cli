@@ -126,6 +126,124 @@ RSpec.describe FB::Auth do
     end
   end
 
+  # --- Setup Config From Args ---
+
+  describe ".setup_config_from_args" do
+    context "with valid args" do
+      When(:result) { FB::Auth.setup_config_from_args("id1", "sec1") }
+      Then { result == { "client_id" => "id1", "client_secret" => "sec1" } }
+      And  { File.exist?(FB::Auth.config_path) }
+    end
+
+    context "with nil client_id" do
+      When(:result) { FB::Auth.setup_config_from_args(nil, "sec1") }
+      Then { result == Failure(SystemExit) }
+    end
+
+    context "with empty client_secret" do
+      When(:result) { FB::Auth.setup_config_from_args("id1", "") }
+      Then { result == Failure(SystemExit) }
+    end
+  end
+
+  # --- Authorize URL ---
+
+  describe ".authorize_url" do
+    Given(:config) { { "client_id" => "test_cid", "client_secret" => "sec" } }
+    When(:result) { FB::Auth.authorize_url(config) }
+    Then { result.include?("auth.freshbooks.com/oauth/authorize") }
+    And  { result.include?("client_id=test_cid") }
+  end
+
+  # --- Extract Code From URL ---
+
+  describe ".extract_code_from_url" do
+    context "with valid redirect URL" do
+      When(:result) { FB::Auth.extract_code_from_url("https://localhost?code=abc123") }
+      Then { result == "abc123" }
+    end
+
+    context "with no code parameter" do
+      When(:result) { FB::Auth.extract_code_from_url("https://localhost?error=denied") }
+      Then { result.nil? }
+    end
+  end
+
+  # --- Auth Status ---
+
+  describe ".auth_status" do
+    context "with no config or tokens" do
+      When(:result) { FB::Auth.auth_status }
+      Then { result["config_exists"] == false }
+      And  { result["tokens_exist"] == false }
+    end
+
+    context "with config and tokens" do
+      Given {
+        FB::Auth.save_config("client_id" => "id", "client_secret" => "sec", "business_id" => 123, "account_id" => "acc")
+        FB::Auth.save_tokens("access_token" => "tok", "refresh_token" => "ref", "expires_in" => 3600, "created_at" => Time.now.to_i)
+      }
+      When(:result) { FB::Auth.auth_status }
+      Then { result["config_exists"] == true }
+      And  { result["tokens_exist"] == true }
+      And  { result["tokens_expired"] == false }
+      And  { result["business_id"] == 123 }
+    end
+  end
+
+  # --- Fetch Businesses ---
+
+  describe ".fetch_businesses" do
+    Given {
+      stub_request(:get, FB::Auth::ME_URL)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "response" => {
+              "business_memberships" => [
+                { "business" => { "id" => 1, "name" => "Biz One", "account_id" => "acc1" } },
+                { "business" => { "id" => 2, "name" => "Biz Two", "account_id" => "acc2" } }
+              ]
+            }
+          }.to_json
+        )
+    }
+    When(:result) { FB::Auth.fetch_businesses("token") }
+    Then { result.length == 2 }
+    And  { result.first.dig("business", "name") == "Biz One" }
+  end
+
+  # --- Select Business ---
+
+  describe ".select_business" do
+    let(:businesses) {
+      [
+        { "business" => { "id" => 1, "name" => "Biz One", "account_id" => "acc1" } },
+        { "business" => { "id" => 2, "name" => "Biz Two", "account_id" => "acc2" } }
+      ]
+    }
+
+    context "with valid business_id" do
+      Given { FB::Auth.save_config("client_id" => "id", "client_secret" => "sec") }
+      When(:result) {
+        config = FB::Auth.load_config
+        FB::Auth.select_business(config, 2, businesses)
+      }
+      Then { result["business_id"] == 2 }
+      And  { result["account_id"] == "acc2" }
+    end
+
+    context "with invalid business_id" do
+      Given { FB::Auth.save_config("client_id" => "id", "client_secret" => "sec") }
+      When(:result) {
+        config = FB::Auth.load_config
+        FB::Auth.select_business(config, 999, businesses)
+      }
+      Then { result == Failure(SystemExit) }
+    end
+  end
+
   # --- Defaults ---
 
   describe ".load_defaults" do

@@ -38,6 +38,28 @@ RSpec.describe FB::Cli do
     }
   end
 
+  # --- interactive? ---
+
+  describe "interactive?" do
+    it "returns false when $stdin.tty? is false" do
+      allow($stdin).to receive(:tty?).and_return(false)
+      cli = FB::Cli.new
+      expect(cli.send(:interactive?)).to eq(false)
+    end
+
+    it "returns true when $stdin.tty? is true and --no-interactive is not set" do
+      allow($stdin).to receive(:tty?).and_return(true)
+      cli = FB::Cli.new([], { no_interactive: false })
+      expect(cli.send(:interactive?)).to eq(true)
+    end
+
+    it "returns false when --no-interactive is set even if TTY" do
+      allow($stdin).to receive(:tty?).and_return(true)
+      cli = FB::Cli.new([], { no_interactive: true })
+      expect(cli.send(:interactive?)).to eq(false)
+    end
+  end
+
   # --- entries date logic ---
 
   describe "entries" do
@@ -304,57 +326,70 @@ RSpec.describe FB::Cli do
     let(:projects_url) { %r{api\.freshbooks\.com/projects/business/12345/projects} }
     let(:services_url) { %r{api\.freshbooks\.com/comments/business/12345/services} }
 
+    let(:stub_all) {
+      today = Date.today.to_s
+      stub_request(:get, time_entries_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "result" => {
+              "time_entries" => [
+                { "id" => 1, "client_id" => 10, "project_id" => 20, "duration" => 3600, "started_at" => today, "note" => "Work" }
+              ],
+              "meta" => { "pages" => 1, "page" => 1 }
+            }
+          }.to_json
+        )
+      stub_request(:get, clients_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "result" => {
+              "clients" => [{ "id" => 10, "organization" => "Acme Corp", "fname" => "J", "lname" => "D" }],
+              "meta" => { "pages" => 1, "page" => 1 }
+            }
+          }.to_json
+        )
+      stub_request(:get, projects_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "result" => {
+              "projects" => [{ "id" => 20, "title" => "Website" }],
+              "meta" => { "pages" => 1, "page" => 1 }
+            }
+          }.to_json
+        )
+      stub_request(:get, services_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: { "result" => { "services" => {} } }.to_json
+        )
+    }
+
     context "with entries" do
-      Given {
-        today = Date.today.to_s
-        stub_request(:get, time_entries_url)
-          .to_return(
-            status: 200,
-            headers: { "Content-Type" => "application/json" },
-            body: {
-              "result" => {
-                "time_entries" => [
-                  { "id" => 1, "client_id" => 10, "project_id" => 20, "duration" => 3600, "started_at" => today }
-                ],
-                "meta" => { "pages" => 1, "page" => 1 }
-              }
-            }.to_json
-          )
-        stub_request(:get, clients_url)
-          .to_return(
-            status: 200,
-            headers: { "Content-Type" => "application/json" },
-            body: {
-              "result" => {
-                "clients" => [{ "id" => 10, "organization" => "Acme Corp", "fname" => "J", "lname" => "D" }],
-                "meta" => { "pages" => 1, "page" => 1 }
-              }
-            }.to_json
-          )
-        stub_request(:get, projects_url)
-          .to_return(
-            status: 200,
-            headers: { "Content-Type" => "application/json" },
-            body: {
-              "result" => {
-                "projects" => [{ "id" => 20, "title" => "Website" }],
-                "meta" => { "pages" => 1, "page" => 1 }
-              }
-            }.to_json
-          )
-        stub_request(:get, services_url)
-          .to_return(
-            status: 200,
-            headers: { "Content-Type" => "application/json" },
-            body: { "result" => { "services" => {} } }.to_json
-          )
-      }
+      Given { stub_all }
       When(:output) { capture_stdout { FB::Cli.start(["status"]) } }
       Then { output.include?("Today") }
       And  { output.include?("This Week") }
       And  { output.include?("This Month") }
       And  { output.include?("Acme Corp / Website") }
       And  { output.include?("1.0h") }
+    end
+
+    context "with --format json" do
+      Given { stub_all }
+      When(:output) { capture_stdout { FB::Cli.start(["status", "--format", "json"]) } }
+      Then {
+        json = JSON.parse(output)
+        json.key?("today") && json.key?("this_week") && json.key?("this_month") &&
+          json["today"]["total_hours"] == 1.0 &&
+          json["today"]["entries"].first["client"] == "Acme Corp"
+      }
     end
   end
 
@@ -383,6 +418,30 @@ RSpec.describe FB::Cli do
       }
       Then { result == Failure(SystemExit) }
     end
+
+    context "with --id --yes --format json" do
+      Given {
+        stub_request(:delete, %r{api\.freshbooks\.com/timetracking/business/12345/time_entries/999})
+          .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: "")
+      }
+      When(:output) {
+        capture_stdout { FB::Cli.start(["delete", "--id", "999", "--yes", "--format", "json"]) }
+      }
+      Then {
+        json = JSON.parse(output)
+        json["id"] == 999 && json["deleted"] == true
+      }
+    end
+
+    context "non-interactive without --id aborts" do
+      Given {
+        allow($stdin).to receive(:tty?).and_return(false)
+      }
+      When(:result) {
+        capture_stdout { FB::Cli.start(["delete"]) }
+      }
+      Then { result == Failure(SystemExit) }
+    end
   end
 
   # --- edit ---
@@ -393,59 +452,220 @@ RSpec.describe FB::Cli do
     let(:projects_url) { %r{api\.freshbooks\.com/projects/business/12345/projects} }
     let(:services_url) { %r{api\.freshbooks\.com/comments/business/12345/services} }
 
+    let(:stub_edit_apis) {
+      stub_request(:get, entry_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "result" => {
+              "time_entry" => { "id" => 999, "duration" => 3600, "note" => "Old note",
+                                "started_at" => "2024-03-01", "client_id" => 10, "project_id" => 20 }
+            }
+          }.to_json
+        )
+      stub_request(:put, entry_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: { "result" => { "time_entry" => { "id" => 999, "duration" => 5400 } } }.to_json
+        )
+      stub_request(:get, clients_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "result" => {
+              "clients" => [{ "id" => 10, "organization" => "Acme", "fname" => "J", "lname" => "D" }],
+              "meta" => { "pages" => 1, "page" => 1 }
+            }
+          }.to_json
+        )
+      stub_request(:get, projects_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "result" => {
+              "projects" => [{ "id" => 20, "title" => "Website" }],
+              "meta" => { "pages" => 1, "page" => 1 }
+            }
+          }.to_json
+        )
+      stub_request(:get, services_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: { "result" => { "services" => {} } }.to_json
+        )
+    }
+
     context "scripted with --id, --duration, --yes" do
+      Given { stub_edit_apis }
+      When(:output) {
+        capture_stdout { FB::Cli.start(["edit", "--id", "999", "--duration", "1.5", "--yes"]) }
+      }
+      Then { output.include?("Time entry 999 updated.") }
+      And  { output.include?("Edit Summary") }
+    end
+
+    context "with --format json" do
+      Given { stub_edit_apis }
+      When(:output) {
+        capture_stdout { FB::Cli.start(["edit", "--id", "999", "--duration", "1.5", "--yes", "--format", "json"]) }
+      }
+      Then {
+        json = JSON.parse(output)
+        json["result"]["time_entry"]["id"] == 999
+      }
+    end
+
+    context "non-interactive without --id aborts" do
       Given {
-        stub_request(:get, entry_url)
-          .to_return(
-            status: 200,
-            headers: { "Content-Type" => "application/json" },
-            body: {
-              "result" => {
-                "time_entry" => { "id" => 999, "duration" => 3600, "note" => "Old note",
-                                  "started_at" => "2024-03-01", "client_id" => 10, "project_id" => 20 }
-              }
-            }.to_json
-          )
-        stub_request(:put, entry_url)
-          .to_return(
-            status: 200,
-            headers: { "Content-Type" => "application/json" },
-            body: { "result" => { "time_entry" => { "id" => 999, "duration" => 5400 } } }.to_json
-          )
+        allow($stdin).to receive(:tty?).and_return(false)
+      }
+      When(:result) {
+        capture_stdout { FB::Cli.start(["edit"]) }
+      }
+      Then { result == Failure(SystemExit) }
+    end
+  end
+
+  # --- log ---
+
+  describe "log" do
+    let(:clients_url) { %r{api\.freshbooks\.com/accounting/account/acc99/users/clients} }
+    let(:projects_url) { %r{api\.freshbooks\.com/projects/business/12345/projects} }
+    let(:services_url) { %r{api\.freshbooks\.com/comments/business/12345/services} }
+    let(:time_entries_url) { %r{api\.freshbooks\.com/timetracking/business/12345/time_entries} }
+
+    let(:stub_log_apis) {
+      stub_request(:get, clients_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "result" => {
+              "clients" => [{ "id" => 10, "organization" => "Acme Corp", "fname" => "J", "lname" => "D" }],
+              "meta" => { "pages" => 1, "page" => 1 }
+            }
+          }.to_json
+        )
+      stub_request(:get, projects_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "result" => {
+              "projects" => [],
+              "meta" => { "pages" => 1, "page" => 1 }
+            }
+          }.to_json
+        )
+      stub_request(:get, services_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: { "result" => { "services" => {} } }.to_json
+        )
+      stub_request(:post, time_entries_url)
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "result" => {
+              "time_entry" => { "id" => 555, "duration" => 9000, "note" => "test work" }
+            }
+          }.to_json
+        )
+    }
+
+    context "non-interactive with all flags" do
+      Given { stub_log_apis }
+      When(:output) {
+        capture_stdout {
+          FB::Cli.start(["log", "--client", "Acme Corp", "--duration", "2.5", "--note", "test work", "--yes"])
+        }
+      }
+      Then { output.include?("Time entry created!") }
+    end
+
+    context "non-interactive with --format json" do
+      Given { stub_log_apis }
+      When(:output) {
+        capture_stdout {
+          FB::Cli.start(["log", "--client", "Acme Corp", "--duration", "2.5", "--note", "test work", "--yes", "--format", "json"])
+        }
+      }
+      Then {
+        json = JSON.parse(output)
+        json["result"]["time_entry"]["id"] == 555
+      }
+    end
+
+    context "non-interactive missing --duration aborts" do
+      Given {
+        allow($stdin).to receive(:tty?).and_return(false)
+        stub_log_apis
+      }
+      When(:result) {
+        capture_stdout {
+          FB::Cli.start(["log", "--client", "Acme Corp", "--note", "test work", "--yes"])
+        }
+      }
+      Then { result == Failure(SystemExit) }
+    end
+
+    context "non-interactive missing --note aborts" do
+      Given {
+        allow($stdin).to receive(:tty?).and_return(false)
+        stub_log_apis
+      }
+      When(:result) {
+        capture_stdout {
+          FB::Cli.start(["log", "--client", "Acme Corp", "--duration", "2.5", "--yes"])
+        }
+      }
+      Then { result == Failure(SystemExit) }
+    end
+
+    context "non-interactive single client auto-selects" do
+      Given {
+        allow($stdin).to receive(:tty?).and_return(false)
+        stub_log_apis
+      }
+      When(:output) {
+        capture_stdout {
+          FB::Cli.start(["log", "--duration", "2.5", "--note", "test work", "--yes"])
+        }
+      }
+      Then { output.include?("Time entry created!") }
+    end
+
+    context "non-interactive multiple clients aborts without --client" do
+      Given {
+        allow($stdin).to receive(:tty?).and_return(false)
         stub_request(:get, clients_url)
           .to_return(
             status: 200,
             headers: { "Content-Type" => "application/json" },
             body: {
               "result" => {
-                "clients" => [{ "id" => 10, "organization" => "Acme", "fname" => "J", "lname" => "D" }],
+                "clients" => [
+                  { "id" => 10, "organization" => "Acme Corp", "fname" => "J", "lname" => "D" },
+                  { "id" => 11, "organization" => "Globex Inc", "fname" => "G", "lname" => "X" }
+                ],
                 "meta" => { "pages" => 1, "page" => 1 }
               }
             }.to_json
           )
-        stub_request(:get, projects_url)
-          .to_return(
-            status: 200,
-            headers: { "Content-Type" => "application/json" },
-            body: {
-              "result" => {
-                "projects" => [{ "id" => 20, "title" => "Website" }],
-                "meta" => { "pages" => 1, "page" => 1 }
-              }
-            }.to_json
-          )
-        stub_request(:get, services_url)
-          .to_return(
-            status: 200,
-            headers: { "Content-Type" => "application/json" },
-            body: { "result" => { "services" => {} } }.to_json
-          )
       }
-      When(:output) {
-        capture_stdout { FB::Cli.start(["edit", "--id", "999", "--duration", "1.5", "--yes"]) }
+      When(:result) {
+        capture_stdout {
+          FB::Cli.start(["log", "--duration", "2.5", "--note", "test", "--yes"])
+        }
       }
-      Then { output.include?("Time entry 999 updated.") }
-      And  { output.include?("Edit Summary") }
+      Then { result == Failure(SystemExit) }
     end
   end
 
@@ -472,6 +692,30 @@ RSpec.describe FB::Cli do
       And  { output.include?("Projects: 2") }
     end
 
+    context "status with --format json" do
+      Given {
+        FB::Auth.save_cache(
+          "updated_at" => Time.now.to_i - 30,
+          "clients_data" => [{ "id" => 1 }],
+          "projects_data" => [{ "id" => 2 }, { "id" => 3 }],
+          "services_data" => []
+        )
+      }
+      When(:output) { capture_stdout { FB::Cli.start(["cache", "status", "--format", "json"]) } }
+      Then {
+        json = JSON.parse(output)
+        json["fresh"] == true && json["clients"] == 1 && json["projects"] == 2
+      }
+    end
+
+    context "status with --format json and no cache" do
+      When(:output) { capture_stdout { FB::Cli.start(["cache", "status", "--format", "json"]) } }
+      Then {
+        json = JSON.parse(output)
+        json["fresh"] == false && json["clients"] == 0
+      }
+    end
+
     context "clear with existing cache" do
       Given {
         FB::Auth.save_cache("updated_at" => Time.now.to_i)
@@ -484,6 +728,97 @@ RSpec.describe FB::Cli do
     context "clear with no cache" do
       When(:output) { capture_stdout { FB::Cli.start(["cache", "clear"]) } }
       Then { output.include?("No cache file found.") }
+    end
+  end
+
+  # --- auth subcommands ---
+
+  describe "auth" do
+    context "setup with --client-id and --client-secret" do
+      When(:output) {
+        capture_stdout { FB::Cli.start(["auth", "setup", "--client-id", "test_id", "--client-secret", "test_sec"]) }
+      }
+      Then { output.include?("Config saved") }
+      And  {
+        config = FB::Auth.load_config
+        config["client_id"] == "test_id" && config["client_secret"] == "test_sec"
+      }
+    end
+
+    context "setup with --format json" do
+      When(:output) {
+        capture_stdout { FB::Cli.start(["auth", "setup", "--client-id", "test_id", "--client-secret", "test_sec", "--format", "json"]) }
+      }
+      Then {
+        json = JSON.parse(output)
+        json["status"] == "saved"
+      }
+    end
+
+    context "setup missing --client-id aborts" do
+      When(:result) {
+        capture_stdout { FB::Cli.start(["auth", "setup", "--client-secret", "sec"]) }
+      }
+      Then { result == Failure(SystemExit) }
+    end
+
+    context "url with config" do
+      Given {
+        FB::Auth.save_config("client_id" => "cid", "client_secret" => "csec")
+      }
+      When(:output) {
+        capture_stdout { FB::Cli.start(["auth", "url"]) }
+      }
+      Then { output.include?("auth.freshbooks.com/oauth/authorize") }
+      And  { output.include?("client_id=cid") }
+    end
+
+    context "url with --format json" do
+      Given {
+        FB::Auth.save_config("client_id" => "cid", "client_secret" => "csec")
+      }
+      When(:output) {
+        capture_stdout { FB::Cli.start(["auth", "url", "--format", "json"]) }
+      }
+      Then {
+        json = JSON.parse(output)
+        json["url"].include?("auth.freshbooks.com")
+      }
+    end
+
+    context "url without config aborts" do
+      When(:result) {
+        capture_stdout { FB::Cli.start(["auth", "url"]) }
+      }
+      Then { result == Failure(SystemExit) }
+    end
+
+    context "status" do
+      When(:output) {
+        capture_stdout { FB::Cli.start(["auth", "status"]) }
+      }
+      Then { output.include?("Config:") }
+      And  { output.include?("Tokens:") }
+    end
+
+    context "status with --format json" do
+      When(:output) {
+        capture_stdout { FB::Cli.start(["auth", "status", "--format", "json"]) }
+      }
+      Then {
+        json = JSON.parse(output)
+        json.key?("config_exists") && json.key?("tokens_exist")
+      }
+    end
+
+    context "non-interactive without subcommand aborts" do
+      Given {
+        allow($stdin).to receive(:tty?).and_return(false)
+      }
+      When(:result) {
+        capture_stdout { FB::Cli.start(["auth"]) }
+      }
+      Then { result == Failure(SystemExit) }
     end
   end
 
@@ -558,7 +893,9 @@ RSpec.describe FB::Cli do
       json = JSON.parse(output)
       cmds = json["commands"]
       cmds.key?("clients") && cmds.key?("projects") && cmds.key?("services") &&
-        cmds.key?("status") && cmds.key?("delete") && cmds.key?("edit") && cmds.key?("cache")
+        cmds.key?("status") && cmds.key?("delete") && cmds.key?("edit") && cmds.key?("cache") &&
+        cmds.key?("auth") && cmds.key?("business") &&
+        json.key?("global_flags")
     }
   end
 
