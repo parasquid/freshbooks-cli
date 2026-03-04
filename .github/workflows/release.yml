@@ -1,0 +1,69 @@
+name: Release Gem
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - lib/fb/version.rb
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Check if version is already published
+        id: check
+        run: |
+          LOCAL_VERSION=$(ruby -r ./lib/fb/version -e "puts FB::VERSION")
+          echo "local_version=$LOCAL_VERSION" >> "$GITHUB_OUTPUT"
+
+          PUBLISHED=$(gem search freshbooks-cli --remote --exact | grep -oP '\d+\.\d+\.\d+' || echo "0.0.0")
+          echo "published_version=$PUBLISHED" >> "$GITHUB_OUTPUT"
+
+          if [ "$LOCAL_VERSION" = "$PUBLISHED" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Version $LOCAL_VERSION already published, skipping release."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Will release $LOCAL_VERSION (published: $PUBLISHED)"
+          fi
+
+      - name: Run tests
+        if: steps.check.outputs.skip == 'false'
+        run: bundle exec rspec
+
+      - name: Configure git for rake release
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Release gem
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+        run: |
+          mkdir -p ~/.gem
+          echo "---" > ~/.gem/credentials
+          echo ":rubygems_api_key: ${GEM_HOST_API_KEY}" >> ~/.gem/credentials
+          chmod 0600 ~/.gem/credentials
+          rake release
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: v${{ steps.check.outputs.local_version }}
+        run: |
+          gh release create "$VERSION" --generate-notes --title "$VERSION"
