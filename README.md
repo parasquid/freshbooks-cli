@@ -1,4 +1,4 @@
-# FreshBooks CLI (`fb`)
+# FreshBooks CLI (`fb`) ![Gem Total Downloads](https://img.shields.io/gem/dt/freshbooks-cli)
 
 A command-line tool for managing FreshBooks time tracking. Supports OAuth2 authentication, interactive time logging with remembered defaults, entry listings, client/project/service browsing, hours summaries, and inline editing and deletion of entries.
 
