@@ -1,7 +1,7 @@
 ---
 name: freshbooks
-description: Log time, check entries, and manage FreshBooks time tracking via the fb CLI
-auto-activate: when the user asks about time tracking, logging hours, FreshBooks entries, work hours, or billing time
+description: 'Log time, check entries, edit/delete entries, and troubleshoot FreshBooks auth using the fb CLI. Use this skill whenever the request is about FreshBooks time tracking workflows: timesheets, billable hours, work logs, correcting logged time, reconciling daily/weekly totals, or auth/business selection needed to perform those tasks, even if the user does not explicitly ask for "FreshBooks CLI". Do not use this skill for unrelated FreshBooks tasks such as invoice design, accounting reports, or general bookkeeping that does not involve time entries.'
+auto-activate: when the user asks to log/edit/delete/check FreshBooks time entries, reconcile billable hours, fix timesheet mistakes, or complete auth/business selection required for those time-entry actions; do not auto-activate for invoices, expense bookkeeping, payment failures, branding, or accounting reports unless time-entry operations are also explicitly requested
 allowed-tools:
   - Bash(fb *)
   - Bash(./fb *)
@@ -24,6 +24,10 @@ fb cache status --format json
 If `fb` is missing:
 - Stop and tell the user to install the FreshBooks CLI binary first.
 - Do not continue with auth or logging commands until `fb` is available.
+
+If both `fb` and `./fb` are available:
+- Prefer `./fb` when working inside this repository to preserve project-local behavior.
+- Otherwise use `fb`.
 
 ## Deterministic Auth State Machine (Minimize Back-and-Forth)
 
@@ -61,6 +65,7 @@ Use `fb auth status --format json` and branch exactly once per blocker:
 - Batch credential asks together when setup is missing (`client_id` + `client_secret`).
 - For OAuth completion, ask only for the full callback URL.
 - For business selection, ask only for the business ID.
+- If a command fails, show the concrete error and ask only for the single missing input needed to continue.
 
 ## Client/Project/Service Resolution Rules
 
@@ -93,6 +98,7 @@ When executing `fb` commands:
 - **Always** pass explicit flags (`--client`, `--duration`, `--note`, `--id`) — never rely on interactive prompts
 - **Always** use `--id` for `edit` and `delete` commands
 - Parse JSON output to extract entry IDs, totals, and status
+- After each mutation (`log`, `edit`, `delete`), run one verification read (`fb entries ... --format json` or `fb status --format json`) and report the result.
 
 **Important: Services are project-scoped and MUST always be specified when logging time.** `fb services` may return empty — services are embedded in project data. Use `--service "Name"` with the service name from the project (visible in `fb projects --format json` under the `services` array). Common service names: Development, Research, General, Meetings. Infer the service from context clues in the user's request (e.g. "development work" → "Development", "a meeting" → "Meetings"). If the service cannot be inferred, ask the user before logging.
 
@@ -108,7 +114,8 @@ fb entries --from YYYY-MM-DD --to YYYY-MM-DD --format json  # Date range
 ### Log Time
 ```bash
 fb log --client "Client Name" --project "Project" --service "Service" --duration HOURS --note "Description" --yes --format json
-# --project, --date are optional; --client, --duration, --note, --service are required
+# --project is required when multiple projects are possible and should be supplied for deterministic automation.
+# --date is optional; --client, --duration, --note, and --service are required.
 # IMPORTANT: Always include --service. Infer the service from context (e.g. "development work" → "Development",
 # "meeting" → "Meetings", "research" → "Research"). If unsure, ask the user. Never omit --service.
 ```
@@ -163,10 +170,20 @@ fb cache refresh                # Force refresh
   - Ask user to paste full redirect URL including query string.
 - `Multiple clients found. Use --client`:
   - Ask once for client name, then continue.
+- `Multiple projects found. Use --project`:
+  - Ask once for project name, then continue.
 - `Service not found`:
   - Refresh project list for selected client and pick service from that project.
 - Missing required flags in non-interactive mode:
   - Re-run command with explicit required flags; do not switch to interactive prompts.
+
+## Response Contract
+
+When reporting results to the user:
+- Include what command(s) were run.
+- Include key IDs and totals (entry ID, duration, date range, total hours).
+- If verification fails, state exactly what failed and the next corrective action.
+- Keep output concise and machine-checkable when possible (prefer JSON-derived facts, not guesses).
 
 ### Log hours for today
 1. `fb clients --format json` — get available clients

@@ -1,0 +1,42 @@
+[
+  {
+    "query": "I logged 2.5h on the wrong FreshBooks project today. Please move that entry to 'Website Redesign' and keep the same note.",
+    "should_trigger": true
+  },
+  {
+    "query": "Can you show my FreshBooks total hours for this week and break it down by day?",
+    "should_trigger": true
+  },
+  {
+    "query": "Need to log 3 hours to Acme for API work and 1 hour for meetings, both for yesterday.",
+    "should_trigger": true
+  },
+  {
+    "query": "FreshBooks auth is failing after I switched machines. Help me reconnect and pick the right business.",
+    "should_trigger": true
+  },
+  {
+    "query": "Please delete the duplicate time entry I added this morning in FreshBooks.",
+    "should_trigger": true
+  },
+  {
+    "query": "Generate and send invoice #INV-204 for client Acme with net 30 terms.",
+    "should_trigger": false
+  },
+  {
+    "query": "I need a profit and loss report for Q1 from FreshBooks accounting.",
+    "should_trigger": false
+  },
+  {
+    "query": "Update my FreshBooks company logo and invoice template colors.",
+    "should_trigger": false
+  },
+  {
+    "query": "Export all client contact emails from FreshBooks CRM fields to CSV.",
+    "should_trigger": false
+  },
+  {
+    "query": "My credit card payment in FreshBooks failed for a vendor bill; can you fix bookkeeping entries?",
+    "should_trigger": false
+  }
+]

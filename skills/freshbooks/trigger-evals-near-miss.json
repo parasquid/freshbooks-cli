@@ -1,0 +1,42 @@
+[
+  {
+    "query": "FreshBooks says I have 8.25h today but my notes show 7.75h. Find the mismatch and fix the incorrect time entry.",
+    "should_trigger": true
+  },
+  {
+    "query": "I need to split one FreshBooks entry into two services: 1h Meetings and 2h Development for the same project.",
+    "should_trigger": true
+  },
+  {
+    "query": "Auth is set up but I switched to a different business and now logging fails; help me select the right FreshBooks business and log 2h.",
+    "should_trigger": true
+  },
+  {
+    "query": "Show all FreshBooks entries from March 1 to March 7 and total them by day so I can submit payroll.",
+    "should_trigger": true
+  },
+  {
+    "query": "Create an invoice from my logged hours and email it to the client.",
+    "should_trigger": false
+  },
+  {
+    "query": "My FreshBooks dashboard colors are off after rebranding; can you update templates and logo assets?",
+    "should_trigger": false
+  },
+  {
+    "query": "Pull FreshBooks P&L plus balance sheet for Q4 and summarize trends.",
+    "should_trigger": false
+  },
+  {
+    "query": "A client payment failed in FreshBooks; reconcile A/R and update accounting entries.",
+    "should_trigger": false
+  },
+  {
+    "query": "Export FreshBooks contacts and tax IDs to CSV for CRM cleanup.",
+    "should_trigger": false
+  },
+  {
+    "query": "Set up recurring monthly invoice reminders in FreshBooks.",
+    "should_trigger": false
+  }
+]
