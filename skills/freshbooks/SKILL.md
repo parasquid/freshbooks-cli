@@ -13,17 +13,65 @@ Manage FreshBooks time entries using the `fb` CLI tool.
 
 ## Prerequisites
 
-Auth must be configured. Check with:
+Always run this preflight before any time logging or entry mutation:
 
 ```bash
+command -v fb >/dev/null 2>&1
 fb auth status --format json
+fb cache status --format json
 ```
 
-If `config_exists` is false, guide the user through setup:
-1. `fb auth setup --client-id ID --client-secret SECRET`
-2. `fb auth url` — present URL to user
-3. `fb auth callback "REDIRECT_URL"` — after user authorizes
-4. If multiple businesses: `fb business --select ID`
+If `fb` is missing:
+- Stop and tell the user to install the FreshBooks CLI binary first.
+- Do not continue with auth or logging commands until `fb` is available.
+
+## Deterministic Auth State Machine (Minimize Back-and-Forth)
+
+Use `fb auth status --format json` and branch exactly once per blocker:
+
+1. If `config_exists` is `false`:
+   - Ask once for both values in one message: `client_id` and `client_secret`
+   - Run:
+     - `fb auth setup --client-id ID --client-secret SECRET --format json`
+     - `fb auth url --format json`
+   - Provide auth URL and request one value only: full redirect URL (`https://localhost/?code=...`)
+
+2. If `config_exists` is `true` and `tokens_exist` is `false`:
+   - Run: `fb auth url --format json`
+   - Ask only for full redirect URL
+
+3. After redirect URL is provided:
+   - Run: `fb auth callback "REDIRECT_URL" --format json`
+   - If response contains `"business_selected": false`:
+     - Ask only for business ID, then run `fb business --select ID --format json`
+
+4. If `tokens_exist` is `true` but `business_id` is null:
+   - Run: `fb business --format json`
+   - Ask only for business ID, then run `fb business --select ID --format json`
+
+5. After auth completion:
+   - Re-run: `fb auth status --format json`
+   - Proceed only when `config_exists=true`, `tokens_exist=true`, and `business_id` is set.
+
+## Question Minimization Rules
+
+- Ask at most one targeted question per true blocker.
+- Never ask permission questions (e.g. "should I proceed?").
+- Never ask for values that can be derived from API data.
+- Batch credential asks together when setup is missing (`client_id` + `client_secret`).
+- For OAuth completion, ask only for the full callback URL.
+- For business selection, ask only for the business ID.
+
+## Client/Project/Service Resolution Rules
+
+- Before logging, resolve resources in this order:
+  1. `fb clients --format json`
+  2. `fb projects --client "Name" --format json`
+- Services are project-scoped. Always resolve service from the selected project's `services` array.
+- Never depend on `fb services` alone for logging decisions.
+- If multiple clients exist and user did not specify one, ask once for client name.
+- If project is ambiguous, ask once for project name.
+- If service cannot be inferred from user intent, ask once for service name.
 
 ## Dynamic Context
 
@@ -94,6 +142,32 @@ fb cache refresh                # Force refresh
 
 ## Workflows
 
+### Log multiple entries for one date (batch mode)
+1. Ensure auth is valid via the auth state machine above.
+2. Resolve client/project/services once:
+   - `fb clients --format json`
+   - `fb projects --client "Name" --format json`
+3. Execute all `fb log` commands in sequence (same date) with explicit flags:
+   - `--client`, `--project`, `--service`, `--date`, `--duration`, `--note`, `--yes`, `--format json`
+4. Verify in one command:
+   - `fb entries --from YYYY-MM-DD --to YYYY-MM-DD --format json`
+5. Return:
+   - created entry IDs
+   - per-entry duration and note
+   - total hours for the date
+
+### Recovery flow for common failures
+- `No config found`:
+  - Run auth state machine step 1.
+- `Could not find 'code' parameter`:
+  - Ask user to paste full redirect URL including query string.
+- `Multiple clients found. Use --client`:
+  - Ask once for client name, then continue.
+- `Service not found`:
+  - Refresh project list for selected client and pick service from that project.
+- Missing required flags in non-interactive mode:
+  - Re-run command with explicit required flags; do not switch to interactive prompts.
+
 ### Log hours for today
 1. `fb clients --format json` — get available clients
 2. `fb projects --client "Name" --format json` — get projects and their services
@@ -113,6 +187,6 @@ Parse `today.total_hours` from the response.
 ### Full auth setup (new user)
 1. `fb auth setup --client-id ID --client-secret SECRET --format json`
 2. `fb auth url --format json` — show URL to user
-3. User authorizes and provides redirect URL
+3. User authorizes and provides full redirect URL (`https://localhost/?code=...`)
 4. `fb auth callback "REDIRECT_URL" --format json`
 5. If response shows `business_selected: false`: `fb business --format json` then `fb business --select ID --format json`

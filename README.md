@@ -288,6 +288,10 @@ The CLI is designed to be fully scriptable. All commands support `--format json`
 **Full agent auth flow:**
 
 ```bash
+# Preflight (recommended)
+command -v fb >/dev/null 2>&1
+fb auth status --format json
+
 # 1. Save credentials
 fb auth setup --client-id YOUR_ID --client-secret YOUR_SECRET
 
@@ -295,7 +299,7 @@ fb auth setup --client-id YOUR_ID --client-secret YOUR_SECRET
 fb auth url
 
 # 3. After user authorizes, exchange the code
-fb auth callback "https://localhost?code=abc123"
+fb auth callback "https://localhost/?code=abc123"
 
 # 4. If multiple businesses, select one
 fb business --select 12345
