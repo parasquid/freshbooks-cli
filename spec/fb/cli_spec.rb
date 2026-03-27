@@ -928,6 +928,122 @@ RSpec.describe FB::Cli do
     Then { stderr_output.include?("[DRY RUN]") }
   end
 
+  # --- dry-run integration ---
+
+  describe "dry-run integration" do
+    let(:stale_cache) {
+      {
+        "updated_at" => Time.now.to_i - 700,
+        "clients_data" => [{ "id" => 10, "organization" => "Acme Corp", "fname" => "", "lname" => "" }],
+        "projects_data" => [],
+        "services_data" => [],
+        "clients" => { "10" => "Acme Corp" },
+        "projects" => {},
+        "services" => {}
+      }
+    }
+
+    before { FB::Auth.save_cache(stale_cache) }
+
+    describe "log --dry-run" do
+      context "table output" do
+        When(:stdout) {
+          capture_stdout {
+            FB::Cli.start(["log", "--client", "Acme Corp", "--duration", "1.5",
+                           "--note", "test work", "--yes", "--dry-run"])
+          }
+        }
+        Then { stdout.include?("Time entry created!") }
+      end
+
+      context "json output includes _dry_run metadata" do
+        When(:stdout) {
+          capture_stdout {
+            FB::Cli.start(["log", "--client", "Acme Corp", "--duration", "1.5",
+                           "--note", "test work", "--yes", "--dry-run", "--format", "json"])
+          }
+        }
+        Then {
+          json = JSON.parse(stdout)
+          json["_dry_run"]["simulated"] == true
+        }
+      end
+    end
+
+    describe "edit --dry-run" do
+      context "table output" do
+        When(:stdout) {
+          capture_stdout {
+            FB::Cli.start(["edit", "--id", "999", "--duration", "2.0", "--yes", "--dry-run"])
+          }
+        }
+        Then { stdout.include?("Time entry 999 updated.") }
+      end
+
+      context "json output includes _dry_run metadata" do
+        When(:stdout) {
+          capture_stdout {
+            FB::Cli.start(["edit", "--id", "999", "--duration", "2.0",
+                           "--yes", "--dry-run", "--format", "json"])
+          }
+        }
+        Then {
+          json = JSON.parse(stdout)
+          json["_dry_run"]["simulated"] == true
+        }
+      end
+    end
+
+    describe "delete --dry-run" do
+      context "table output" do
+        When(:stdout) {
+          capture_stdout {
+            FB::Cli.start(["delete", "--id", "999", "--yes", "--dry-run"])
+          }
+        }
+        Then { stdout.include?("Time entry 999 deleted.") }
+      end
+
+      context "json output includes _dry_run metadata" do
+        When(:stdout) {
+          capture_stdout {
+            FB::Cli.start(["delete", "--id", "999", "--yes", "--dry-run", "--format", "json"])
+          }
+        }
+        Then {
+          json = JSON.parse(stdout)
+          json["_dry_run"]["simulated"] == true
+        }
+      end
+    end
+
+    describe "clients --dry-run" do
+      context "table output uses stale cache" do
+        When(:stdout) {
+          capture_stdout { FB::Cli.start(["clients", "--dry-run"]) }
+        }
+        Then { stdout.include?("Acme Corp") }
+      end
+
+      context "json output includes _dry_run metadata" do
+        When(:stdout) {
+          capture_stdout { FB::Cli.start(["clients", "--dry-run", "--format", "json"]) }
+        }
+        Then {
+          json = JSON.parse(stdout)
+          json["_dry_run"]["simulated"] == true && json["data"].is_a?(Array)
+        }
+      end
+    end
+
+    describe "stderr banner" do
+      When(:stderr) {
+        capture_stderr { capture_stdout { FB::Cli.start(["version", "--dry-run"]) } }
+      }
+      Then { stderr.include?("[DRY RUN] No changes will be made.") }
+    end
+  end
+
   # --- display_name ---
 
   describe "#display_name (via entries table output)" do
