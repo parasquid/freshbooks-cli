@@ -6,30 +6,43 @@ RSpec.describe FB::Auth do
   # --- Config Loading ---
 
   describe ".load_config" do
-    context "with valid config file" do
+    context "with credentials in ENV and business_id in config.json" do
       Given {
-        FB::Auth.save_config("client_id" => "abc", "client_secret" => "xyz")
+        ENV["FRESHBOOKS_CLIENT_ID"] = "abc"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "xyz"
+        FileUtils.mkdir_p(FB::Auth.data_dir)
+        File.write(FB::Auth.config_path, JSON.generate("business_id" => 99, "account_id" => "acc9"))
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
       When(:result) { FB::Auth.load_config }
-      Then { result == { "client_id" => "abc", "client_secret" => "xyz" } }
+      Then { result["client_id"] == "abc" }
+      And  { result["client_secret"] == "xyz" }
+      And  { result["business_id"] == 99 }
+      And  { result["account_id"] == "acc9" }
     end
 
-    context "with empty file" do
-      Given { File.write(FB::Auth.config_path, "") }
-      When(:result) { FB::Auth.load_config }
-      Then { result.nil? }
-    end
-
-    context "with missing client_secret" do
+    context "with credentials in .env file" do
       Given {
         FileUtils.mkdir_p(FB::Auth.data_dir)
-        File.write(FB::Auth.config_path, JSON.generate("client_id" => "abc"))
+        File.write(File.join(FB::Auth.data_dir, ".env"), "FRESHBOOKS_CLIENT_ID=dotenv_id\nFRESHBOOKS_CLIENT_SECRET=dotenv_sec\n")
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
       When(:result) { FB::Auth.load_config }
-      Then { result.nil? }
+      Then { result["client_id"] == "dotenv_id" }
+      And  { result["client_secret"] == "dotenv_sec" }
     end
 
-    context "with no file" do
+    context "with no credentials in ENV or .env" do
+      Given {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
       When(:result) { FB::Auth.load_config }
       Then { result.nil? }
     end
@@ -38,11 +51,11 @@ RSpec.describe FB::Auth do
   # --- Config Saving ---
 
   describe ".save_config" do
-    When { FB::Auth.save_config("client_id" => "id1", "client_secret" => "sec1") }
+    When { FB::Auth.save_config("client_id" => "id1", "client_secret" => "sec1", "business_id" => 5) }
     Then { File.exist?(FB::Auth.config_path) }
     And {
       parsed = JSON.parse(File.read(FB::Auth.config_path))
-      parsed == { "client_id" => "id1", "client_secret" => "sec1" }
+      parsed == { "business_id" => 5 }
     }
   end
 
@@ -272,8 +285,16 @@ RSpec.describe FB::Auth do
         allow(IO).to receive(:console).and_return(console_double)
         allow(console_double).to receive(:getpass).with("").and_return("my_secret")
       }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
       When { capture_stdout { FB::Auth.setup_config } }
-      Then { FB::Auth.load_config["client_id"] == "my_client_id" }
+      Then {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "my_client_id"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "my_secret"
+        FB::Auth.load_config["client_id"] == "my_client_id"
+      }
       And  { FB::Auth.load_config["client_secret"] == "my_secret" }
     end
   end
@@ -312,8 +333,14 @@ RSpec.describe FB::Auth do
 
     context "with config and tokens" do
       Given {
-        FB::Auth.save_config("client_id" => "id", "client_secret" => "sec", "business_id" => 123, "account_id" => "acc")
+        ENV["FRESHBOOKS_CLIENT_ID"] = "id"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "sec"
+        FB::Auth.save_config("business_id" => 123, "account_id" => "acc")
         FB::Auth.save_tokens("access_token" => "tok", "refresh_token" => "ref", "expires_in" => 3600, "created_at" => Time.now.to_i)
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
       When(:result) { FB::Auth.auth_status }
       Then { result["config_exists"] == true }
@@ -357,7 +384,14 @@ RSpec.describe FB::Auth do
     }
 
     context "with valid business_id" do
-      Given { FB::Auth.save_config("client_id" => "id", "client_secret" => "sec") }
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "id"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "sec"
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
       When(:result) {
         config = FB::Auth.load_config
         FB::Auth.select_business(config, 2, businesses)
@@ -367,7 +401,14 @@ RSpec.describe FB::Auth do
     end
 
     context "with invalid business_id" do
-      Given { FB::Auth.save_config("client_id" => "id", "client_secret" => "sec") }
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "id"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "sec"
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
       When(:result) {
         config = FB::Auth.load_config
         FB::Auth.select_business(config, 999, businesses)

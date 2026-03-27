@@ -53,19 +53,26 @@ module FB
       # --- Config ---
 
       def load_config
-        return nil unless File.exist?(config_path)
-        contents = File.read(config_path).strip
-        return nil if contents.empty?
-        config = JSON.parse(contents)
-        return nil unless config["client_id"] && config["client_secret"]
+        load_dotenv
+        client_id = ENV["FRESHBOOKS_CLIENT_ID"]&.strip
+        client_secret = ENV["FRESHBOOKS_CLIENT_SECRET"]&.strip
+        return nil if client_id.nil? || client_id.empty? || client_secret.nil? || client_secret.empty?
+        config = { "client_id" => client_id, "client_secret" => client_secret }
+        if File.exist?(config_path)
+          begin
+            file_config = JSON.parse(File.read(config_path).strip)
+            config["business_id"] = file_config["business_id"] if file_config["business_id"]
+            config["account_id"] = file_config["account_id"] if file_config["account_id"]
+          rescue JSON::ParserError
+          end
+        end
         config
-      rescue JSON::ParserError
-        nil
       end
 
       def save_config(config)
         ensure_data_dir
-        File.write(config_path, JSON.pretty_generate(config) + "\n")
+        safe_config = config.reject { |k, _| ["client_id", "client_secret"].include?(k) }
+        File.write(config_path, JSON.pretty_generate(safe_config) + "\n")
       end
 
       def setup_config
