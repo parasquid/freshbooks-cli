@@ -468,6 +468,49 @@ RSpec.describe FB::Auth do
       JSON.parse(File.read(FB::Auth.cache_path)) == { "updated_at" => 100 }
     }
   end
+
+  # --- Dry-run mode ---
+
+  describe ".valid_access_token in dry-run" do
+    around do |example|
+      Thread.current[:fb_dry_run] = true
+      example.run
+    ensure
+      Thread.current[:fb_dry_run] = false
+    end
+
+    When(:result) { FB::Auth.valid_access_token }
+    Then { result == "dry-run-token" }
+  end
+
+  describe ".require_config in dry-run with existing config" do
+    around do |example|
+      Thread.current[:fb_dry_run] = true
+      example.run
+    ensure
+      Thread.current[:fb_dry_run] = false
+    end
+
+    Given {
+      FB::Auth.save_config("business_id" => 99, "account_id" => "acc1")
+    }
+    When(:result) { FB::Auth.require_config }
+    Then { result["business_id"] == 99 }
+    And  { result["account_id"] == "acc1" }
+  end
+
+  describe ".require_config in dry-run with no config" do
+    around do |example|
+      Thread.current[:fb_dry_run] = true
+      example.run
+    ensure
+      Thread.current[:fb_dry_run] = false
+    end
+
+    When(:result) { FB::Auth.require_config }
+    Then { result["business_id"] == "0" }
+    And  { result["account_id"] == "0" }
+  end
 end
 
 def capture_stdout

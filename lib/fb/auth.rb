@@ -206,6 +206,20 @@ module FB
       end
 
       def require_config
+        if Thread.current[:fb_dry_run]
+          config = {}
+          if File.exist?(config_path)
+            begin
+              config = JSON.parse(File.read(config_path).strip)
+            rescue JSON::ParserError
+              config = {}
+            end
+          end
+          config["business_id"] ||= "0"
+          config["account_id"] ||= "0"
+          return config
+        end
+
         config = load_config
         return config if config
 
@@ -262,6 +276,8 @@ module FB
       end
 
       def valid_access_token
+        return "dry-run-token" if Thread.current[:fb_dry_run]
+
         config = require_config
         tokens = load_tokens
 
