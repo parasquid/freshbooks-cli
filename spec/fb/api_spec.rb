@@ -267,4 +267,92 @@ RSpec.describe FB::Api do
     When(:result) { FB::Api.account_id }
     Then { result == "acc99" }
   end
+
+  # --- Dry-run read path ---
+
+  describe "dry-run read path" do
+    around do |example|
+      Thread.current[:fb_dry_run] = true
+      example.run
+    ensure
+      Thread.current[:fb_dry_run] = false
+    end
+
+    describe ".cached_data ignores freshness in dry-run" do
+      Given {
+        stale_cache = {
+          "updated_at" => Time.now.to_i - 700,
+          "clients_data" => [{ "id" => 1, "organization" => "Acme" }]
+        }
+        FB::Auth.save_cache(stale_cache)
+      }
+      When(:result) { FB::Api.cached_data("clients_data") }
+      Then { result == [{ "id" => 1, "organization" => "Acme" }] }
+    end
+
+    describe ".fetch_all_pages returns empty array in dry-run" do
+      When(:result) {
+        FB::Api.fetch_all_pages("https://api.freshbooks.com/fake", "items")
+      }
+      Then { result == [] }
+    end
+
+    describe ".fetch_services returns empty array in dry-run (no HTTP)" do
+      When(:result) { FB::Api.fetch_services }
+      Then { result == [] }
+    end
+
+    describe ".fetch_services uses stale cache in dry-run" do
+      Given {
+        stale_cache = {
+          "updated_at" => Time.now.to_i - 700,
+          "services_data" => [{ "id" => 5, "name" => "Dev" }]
+        }
+        FB::Auth.save_cache(stale_cache)
+      }
+      When(:result) { FB::Api.fetch_services }
+      Then { result == [{ "id" => 5, "name" => "Dev" }] }
+    end
+
+    describe ".fetch_time_entry returns mock entry in dry-run" do
+      When(:result) { FB::Api.fetch_time_entry(42) }
+      Then { result["id"] == 42 }
+      And  { result["duration"] == 3600 }
+      And  { result["is_logged"] == true }
+    end
+  end
+
+  # --- Dry-run write path ---
+
+  describe "dry-run write path" do
+    around do |example|
+      Thread.current[:fb_dry_run] = true
+      example.run
+    ensure
+      Thread.current[:fb_dry_run] = false
+    end
+
+    describe ".create_time_entry returns mock response in dry-run" do
+      let(:entry) { { "duration" => 3600, "note" => "test", "client_id" => 10 } }
+      When(:result) { FB::Api.create_time_entry(entry) }
+      Then { result["_dry_run"]["simulated"] == true }
+      And  { result["_dry_run"]["payload_sent"] == entry }
+      And  { result["result"]["time_entry"]["id"] == 0 }
+      And  { result["result"]["time_entry"]["duration"] == 3600 }
+    end
+
+    describe ".update_time_entry returns mock response in dry-run" do
+      let(:fields) { { "duration" => 5400, "note" => "updated" } }
+      When(:result) { FB::Api.update_time_entry(99, fields) }
+      Then { result["_dry_run"]["simulated"] == true }
+      And  { result["_dry_run"]["payload_sent"] == fields }
+      And  { result["result"]["time_entry"]["id"] == 99 }
+      And  { result["result"]["time_entry"]["duration"] == 5400 }
+    end
+
+    describe ".delete_time_entry returns true in dry-run" do
+      When(:result) { FB::Api.delete_time_entry(99) }
+      Then { result == true }
+    end
+  end
 end

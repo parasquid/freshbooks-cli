@@ -40,6 +40,8 @@ module FB
       # --- Paginated fetch ---
 
       def fetch_all_pages(url, result_key, params: {})
+        return [] if Thread.current[:fb_dry_run]
+
         page = 1
         all_items = []
 
@@ -79,6 +81,8 @@ module FB
       end
 
       def cached_data(key)
+        return Auth.load_cache[key] if Thread.current[:fb_dry_run]
+
         cache = Auth.load_cache
         return nil unless cache["updated_at"] && (Time.now.to_i - cache["updated_at"]) < 600
         cache[key]
@@ -127,6 +131,8 @@ module FB
       # --- Services ---
 
       def fetch_services(force: false)
+        return (Auth.load_cache["services_data"] || []) if Thread.current[:fb_dry_run]
+
         unless force
           cached = cached_data("services_data")
           return cached if cached
@@ -159,6 +165,16 @@ module FB
       end
 
       def fetch_time_entry(entry_id)
+        if Thread.current[:fb_dry_run]
+          return {
+            "id" => entry_id,
+            "duration" => 3600,
+            "note" => "(dry run - entry #{entry_id})",
+            "started_at" => "#{Date.today}T00:00:00Z",
+            "is_logged" => true
+          }
+        end
+
         url = "#{BASE}/timetracking/business/#{business_id}/time_entries/#{entry_id}"
         response = HTTParty.get(url, { headers: headers })
 
@@ -173,6 +189,13 @@ module FB
       end
 
       def create_time_entry(entry)
+        if Thread.current[:fb_dry_run]
+          return {
+            "_dry_run" => { "simulated" => true, "payload_sent" => entry },
+            "result" => { "time_entry" => entry.merge("id" => 0) }
+          }
+        end
+
         url = "#{BASE}/timetracking/business/#{business_id}/time_entries"
         body = { time_entry: entry }
 
@@ -191,6 +214,13 @@ module FB
       end
 
       def update_time_entry(entry_id, fields)
+        if Thread.current[:fb_dry_run]
+          return {
+            "_dry_run" => { "simulated" => true, "payload_sent" => fields },
+            "result" => { "time_entry" => fields.merge("id" => entry_id) }
+          }
+        end
+
         url = "#{BASE}/timetracking/business/#{business_id}/time_entries/#{entry_id}"
         body = { time_entry: fields }
 
@@ -209,6 +239,8 @@ module FB
       end
 
       def delete_time_entry(entry_id)
+        return true if Thread.current[:fb_dry_run]
+
         url = "#{BASE}/timetracking/business/#{business_id}/time_entries/#{entry_id}"
 
         response = HTTParty.delete(url, { headers: headers })
