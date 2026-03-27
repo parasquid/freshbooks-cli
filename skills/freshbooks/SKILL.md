@@ -35,9 +35,10 @@ Use `fb auth status --format json` and branch exactly once per blocker:
 
 1. If `config_exists` is `false`:
    - Ask once for both values in one message: `client_id` and `client_secret`
-   - Run:
-     - `fb auth setup --client-id ID --client-secret SECRET --format json`
-     - `fb auth url --format json`
+   - Tell the user to set env vars or save to `~/.fb/.env`, then run `fb auth setup --format json`:
+     - Option A (env vars): `FRESHBOOKS_CLIENT_ID=ID FRESHBOOKS_CLIENT_SECRET=SECRET fb auth setup --format json`
+     - Option B (.env file): save to `~/.fb/.env`, then `fb auth setup --format json`
+   - Run: `fb auth url --format json`
    - Provide auth URL and request one value only: full redirect URL (`https://localhost/?code=...`)
 
 2. If `config_exists` is `true` and `tokens_exist` is `false`:
@@ -62,7 +63,7 @@ Use `fb auth status --format json` and branch exactly once per blocker:
 - Ask at most one targeted question per true blocker.
 - Never ask permission questions (e.g. "should I proceed?").
 - Never ask for values that can be derived from API data.
-- Batch credential asks together when setup is missing (`client_id` + `client_secret`).
+- Batch credential asks together when setup is missing (`client_id` + `client_secret`); instruct the user to set `FRESHBOOKS_CLIENT_ID`/`FRESHBOOKS_CLIENT_SECRET` env vars or save to `~/.fb/.env`.
 - For OAuth completion, ask only for the full callback URL.
 - For business selection, ask only for the business ID.
 - If a command fails, show the concrete error and ask only for the single missing input needed to continue.
@@ -202,7 +203,7 @@ Parse `today.total_hours` from the response.
 3. `fb edit --id ID --duration 3 --yes --format json`
 
 ### Full auth setup (new user)
-1. `fb auth setup --client-id ID --client-secret SECRET --format json`
+1. Ask user for `client_id` and `client_secret`, then: `FRESHBOOKS_CLIENT_ID=ID FRESHBOOKS_CLIENT_SECRET=SECRET fb auth setup --format json`
 2. `fb auth url --format json` — show URL to user
 3. User authorizes and provides full redirect URL (`https://localhost/?code=...`)
 4. `fb auth callback "REDIRECT_URL" --format json`

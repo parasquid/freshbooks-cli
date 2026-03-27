@@ -84,7 +84,15 @@ All commands support `--format json` (global class option). Mutation commands (`
 - Design specs and implementation plans go in `docs/plans/` — nowhere else.
 - When creating a plan, the first task should be updating the related GitHub issue with the full contents of the design spec only (not the implementation plan, not just links).
 - If there is no GitHub issue for the work, suggest creating one and upload the plan to the newly created issue.
-- The last task in a plan should be updating or creating documentation as necessary (README, AGENTS.md, etc.).
+- The last task in a plan should be updating or creating ALL related documentation: README, AGENTS.md, and any skill files (e.g. `skills/*/SKILL.md`) that reference changed behavior or conventions.
+
+## Skills
+
+- **FreshBooks** (`skills/freshbooks/SKILL.md`) — Time tracking via the `fb` CLI. Auto-activates for time tracking queries.
+
+## Superpowers Overrides
+
+- **Plans location:** Save all design specs and implementation plans to `docs/plans/` (overrides the skill default of `docs/superpowers/plans/`)
 
 ## FreshBooks API Gotchas
 
