@@ -4,6 +4,7 @@ require "httparty"
 require "json"
 require "uri"
 require "fileutils"
+require "dotenv"
 
 module FB
   class Auth
