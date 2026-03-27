@@ -84,8 +84,14 @@ Business: Acme Inc
 #### Auth subcommands (for agents/scripts)
 
 ```bash
-# Save OAuth credentials
-fb auth setup --client-id YOUR_ID --client-secret YOUR_SECRET
+# Save OAuth credentials — set env vars first, then run setup
+export FRESHBOOKS_CLIENT_ID=YOUR_ID
+export FRESHBOOKS_CLIENT_SECRET=YOUR_SECRET
+fb auth setup
+
+# Or use a .env file (recommended — keeps secrets out of shell history)
+cp .env.example ~/.fb/.env   # edit with your credentials
+fb auth setup
 
 # Get the authorization URL
 fb auth url                    # prints URL to stdout
@@ -292,8 +298,10 @@ The CLI is designed to be fully scriptable. All commands support `--format json`
 command -v fb >/dev/null 2>&1
 fb auth status --format json
 
-# 1. Save credentials
-fb auth setup --client-id YOUR_ID --client-secret YOUR_SECRET
+# 1. Save credentials (via env vars or ~/.fb/.env)
+export FRESHBOOKS_CLIENT_ID=YOUR_ID
+export FRESHBOOKS_CLIENT_SECRET=YOUR_SECRET
+fb auth setup
 
 # 2. Get OAuth URL (present to user)
 fb auth url
