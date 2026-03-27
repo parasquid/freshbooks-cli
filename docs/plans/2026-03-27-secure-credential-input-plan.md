@@ -549,6 +549,483 @@ git commit -m "Update AGENTS.md: document env var auth setup"
 
 ---
 
+---
+
+## Amendment: Credential Storage Separation
+
+The following tasks implement the credential storage separation design: credentials live in `~/.fb/.env` only; `config.json` stores only `business_id` and `account_id`. Existing credentials in `config.json` are migrated automatically on the next run.
+
+---
+
+### Task 9: Add write_credentials_to_env helper
+
+**Files:**
+- Modify: `lib/fb/auth.rb`
+- Test: `spec/fb/auth_spec.rb`
+
+- [ ] **Step 1: Write failing tests**
+
+Add to `spec/fb/auth_spec.rb` before the final `end`:
+
+```ruby
+  # --- write_credentials_to_env ---
+
+  describe ".write_credentials_to_env" do
+    let(:env_path) { File.join(FB::Auth.data_dir, ".env") }
+
+    context "when file does not exist" do
+      When { FB::Auth.write_credentials_to_env(env_path, "id1", "sec1") }
+      Then { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=id1") }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=sec1") }
+    end
+
+    context "when file exists without the keys" do
+      Given { File.write(env_path, "OTHER_VAR=foo\n") }
+      When { FB::Auth.write_credentials_to_env(env_path, "id2", "sec2") }
+      Then { File.read(env_path).include?("OTHER_VAR=foo") }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=id2") }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=sec2") }
+    end
+
+    context "when file exists with keys already present" do
+      Given { File.write(env_path, "FRESHBOOKS_CLIENT_ID=existing\nFRESHBOOKS_CLIENT_SECRET=existing_sec\n") }
+      When { FB::Auth.write_credentials_to_env(env_path, "new_id", "new_sec") }
+      Then { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=existing") }
+      And  { !File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=new_id") }
+    end
+  end
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `rspec spec/fb/auth_spec.rb -e "write_credentials_to_env"`
+Expected: FAIL with "undefined method"
+
+- [ ] **Step 3: Add write_credentials_to_env to auth.rb**
+
+Add after `load_dotenv` in `lib/fb/auth.rb`:
+
+```ruby
+      def write_credentials_to_env(env_path, client_id, client_secret)
+        ensure_data_dir
+        if File.exist?(env_path)
+          contents = File.read(env_path)
+          append = ""
+          append += "FRESHBOOKS_CLIENT_ID=#{client_id}\n" unless contents.match?(/^FRESHBOOKS_CLIENT_ID=/)
+          append += "FRESHBOOKS_CLIENT_SECRET=#{client_secret}\n" unless contents.match?(/^FRESHBOOKS_CLIENT_SECRET=/)
+          File.open(env_path, "a") { |f| f.write(append) } unless append.empty?
+        else
+          File.write(env_path, "FRESHBOOKS_CLIENT_ID=#{client_id}\nFRESHBOOKS_CLIENT_SECRET=#{client_secret}\n")
+        end
+      end
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `rspec spec/fb/auth_spec.rb -e "write_credentials_to_env"`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add lib/fb/auth.rb spec/fb/auth_spec.rb
+git commit -m "feat(auth): add write_credentials_to_env helper"
+```
+
+---
+
+### Task 10: Add migration and extend load_dotenv
+
+**Files:**
+- Modify: `lib/fb/auth.rb`
+- Test: `spec/fb/auth_spec.rb`
+
+- [ ] **Step 1: Write failing tests**
+
+Add to `spec/fb/auth_spec.rb`:
+
+```ruby
+  # --- migrate_credentials_from_config ---
+
+  describe ".migrate_credentials_from_config" do
+    let(:env_path) { File.join(FB::Auth.data_dir, ".env") }
+
+    context "when config.json has credentials" do
+      Given {
+        FB::Auth.save_config("client_id" => "migrated_id", "client_secret" => "migrated_sec",
+                             "business_id" => 42, "account_id" => "acc1")
+      }
+      When { FB::Auth.migrate_credentials_from_config }
+      Then { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=migrated_id") }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=migrated_sec") }
+      And  {
+        config = JSON.parse(File.read(FB::Auth.config_path))
+        !config.key?("client_id") && !config.key?("client_secret")
+      }
+      And  {
+        config = JSON.parse(File.read(FB::Auth.config_path))
+        config["business_id"] == 42 && config["account_id"] == "acc1"
+      }
+    end
+
+    context "when config.json has no credentials" do
+      Given { FB::Auth.save_config("business_id" => 1, "account_id" => "acc") }
+      When { FB::Auth.migrate_credentials_from_config }
+      Then { !File.exist?(env_path) }
+    end
+
+    context "when config.json does not exist" do
+      When(:result) { FB::Auth.migrate_credentials_from_config }
+      Then { result.nil? }
+    end
+  end
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `rspec spec/fb/auth_spec.rb -e "migrate_credentials_from_config"`
+Expected: FAIL with "undefined method"
+
+- [ ] **Step 3: Add migrate_credentials_from_config and update load_dotenv**
+
+In `lib/fb/auth.rb`, add `migrate_credentials_from_config` after `write_credentials_to_env`:
+
+```ruby
+      def migrate_credentials_from_config
+        return unless File.exist?(config_path)
+        contents = File.read(config_path).strip
+        return if contents.empty?
+        config = JSON.parse(contents) rescue {}
+        client_id = config["client_id"]
+        client_secret = config["client_secret"]
+        return unless client_id || client_secret
+        write_credentials_to_env(File.join(data_dir, ".env"), client_id.to_s, client_secret.to_s)
+        safe_config = config.reject { |k, _| ["client_id", "client_secret"].include?(k) }
+        File.write(config_path, JSON.pretty_generate(safe_config) + "\n")
+      end
+```
+
+Update `load_dotenv` to call migration first:
+
+```ruby
+      def load_dotenv
+        migrate_credentials_from_config
+        dot_env_paths = [
+          File.join(data_dir, ".env"),
+          File.join(Dir.pwd, ".env")
+        ].select { |p| File.exist?(p) }
+        Dotenv.load(*dot_env_paths) unless dot_env_paths.empty?
+      end
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `rspec spec/fb/auth_spec.rb -e "migrate_credentials_from_config"`
+Expected: PASS
+
+- [ ] **Step 5: Run full auth spec**
+
+Run: `rspec spec/fb/auth_spec.rb`
+Expected: All tests pass
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add lib/fb/auth.rb spec/fb/auth_spec.rb
+git commit -m "feat(auth): migrate credentials from config.json to .env on load"
+```
+
+---
+
+### Task 11: Update load_config and save_config
+
+**Files:**
+- Modify: `lib/fb/auth.rb:55-69`
+- Test: `spec/fb/auth_spec.rb`
+
+- [ ] **Step 1: Update existing load_config tests**
+
+In `spec/fb/auth_spec.rb`, replace the `.load_config` describe block:
+
+```ruby
+  describe ".load_config" do
+    context "with credentials in ENV and business data in config.json" do
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "abc"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "xyz"
+        FB::Auth.save_config("business_id" => 99, "account_id" => "acc99")
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
+      When(:result) { FB::Auth.load_config }
+      Then { result["client_id"] == "abc" }
+      And  { result["client_secret"] == "xyz" }
+      And  { result["business_id"] == 99 }
+      And  { result["account_id"] == "acc99" }
+    end
+
+    context "with credentials in ENV and no config.json" do
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "abc"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "xyz"
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
+      When(:result) { FB::Auth.load_config }
+      Then { result["client_id"] == "abc" }
+      And  { result["business_id"].nil? }
+    end
+
+    context "with no credentials in ENV" do
+      Given {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
+      When(:result) { FB::Auth.load_config }
+      Then { result.nil? }
+    end
+
+    context "with empty config.json" do
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "abc"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "xyz"
+        File.write(FB::Auth.config_path, "")
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
+      When(:result) { FB::Auth.load_config }
+      Then { result["client_id"] == "abc" }
+    end
+  end
+```
+
+Also update the `.save_config` test:
+
+```ruby
+  describe ".save_config" do
+    When { FB::Auth.save_config("business_id" => 99, "account_id" => "acc99", "client_id" => "should_be_stripped", "client_secret" => "stripped") }
+    Then { File.exist?(FB::Auth.config_path) }
+    And  {
+      parsed = JSON.parse(File.read(FB::Auth.config_path))
+      parsed == { "business_id" => 99, "account_id" => "acc99" }
+    }
+  end
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `rspec spec/fb/auth_spec.rb -e "load_config" -e "save_config"`
+Expected: FAIL
+
+- [ ] **Step 3: Update load_config and save_config in auth.rb**
+
+Replace `load_config` (lines 55-64):
+
+```ruby
+      def load_config
+        load_dotenv
+        client_id = ENV["FRESHBOOKS_CLIENT_ID"]&.strip
+        client_secret = ENV["FRESHBOOKS_CLIENT_SECRET"]&.strip
+        return nil if client_id.nil? || client_id.empty? || client_secret.nil? || client_secret.empty?
+        config = { "client_id" => client_id, "client_secret" => client_secret }
+        if File.exist?(config_path)
+          begin
+            file_config = JSON.parse(File.read(config_path).strip)
+            config["business_id"] = file_config["business_id"] if file_config["business_id"]
+            config["account_id"] = file_config["account_id"] if file_config["account_id"]
+          rescue JSON::ParserError
+            # ignore malformed config.json
+          end
+        end
+        config
+      end
+```
+
+Replace `save_config` (lines 66-69):
+
+```ruby
+      def save_config(config)
+        ensure_data_dir
+        safe_config = config.reject { |k, _| ["client_id", "client_secret"].include?(k) }
+        File.write(config_path, JSON.pretty_generate(safe_config) + "\n")
+      end
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `rspec spec/fb/auth_spec.rb -e "load_config" -e "save_config"`
+Expected: PASS
+
+- [ ] **Step 5: Run full test suite**
+
+Run: `rspec`
+Expected: All tests pass
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add lib/fb/auth.rb spec/fb/auth_spec.rb
+git commit -m "feat(auth): split credentials to .env, business data to config.json"
+```
+
+---
+
+### Task 12: Update setup_config_from_args and setup_config
+
+**Files:**
+- Modify: `lib/fb/auth.rb:71-123`
+- Test: `spec/fb/auth_spec.rb`
+
+- [ ] **Step 1: Update setup_config_from_args test**
+
+In `spec/fb/auth_spec.rb`, update the "with env vars set" context in `.setup_config_from_args`:
+
+```ruby
+    context "with env vars set" do
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "env_id"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "env_secret"
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
+      When(:result) { FB::Auth.setup_config_from_args }
+      Then { result == { "client_id" => "env_id", "client_secret" => "env_secret" } }
+      And  { !File.exist?(FB::Auth.config_path) }
+    end
+```
+
+Add a new context for interactive setup writing to .env:
+
+```ruby
+  describe ".setup_config (writes to .env)" do
+    let(:env_path) { File.join(FB::Auth.data_dir, ".env") }
+
+    context "writes credentials to .env when file does not exist" do
+      Given {
+        allow($stdin).to receive(:gets).and_return("new_id\n")
+        console_double = instance_double(IO)
+        allow(IO).to receive(:console).and_return(console_double)
+        allow(console_double).to receive(:getpass).with("").and_return("new_secret")
+      }
+      When { capture_stdout { FB::Auth.setup_config } }
+      Then { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=new_id") }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=new_secret") }
+      And  { !File.exist?(FB::Auth.config_path) }
+    end
+
+    context "prompts before overwriting existing credentials" do
+      Given {
+        File.write(env_path, "FRESHBOOKS_CLIENT_ID=old_id\nFRESHBOOKS_CLIENT_SECRET=old_sec\n")
+        allow($stdin).to receive(:gets).and_return("new_id\n", "n\n")
+        console_double = instance_double(IO)
+        allow(IO).to receive(:console).and_return(console_double)
+        allow(console_double).to receive(:getpass).with("").and_return("new_secret")
+      }
+      When { capture_stdout { FB::Auth.setup_config } }
+      Then { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=old_id") }
+    end
+  end
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `rspec spec/fb/auth_spec.rb -e "setup_config"`
+Expected: FAIL
+
+- [ ] **Step 3: Update setup_config_from_args in auth.rb**
+
+Replace the `setup_config_from_args` method (lines 106-123) — remove the `save_config` call:
+
+```ruby
+      def setup_config_from_args
+        load_dotenv
+        client_id = ENV["FRESHBOOKS_CLIENT_ID"]
+        client_secret = ENV["FRESHBOOKS_CLIENT_SECRET"]
+        if client_id.nil? || client_id.strip.empty?
+          abort("Missing FRESHBOOKS_CLIENT_ID. Set it via:\n  export FRESHBOOKS_CLIENT_ID=your_id\n  or add it to ~/.fb/.env")
+        end
+        if client_secret.nil? || client_secret.strip.empty?
+          abort("Missing FRESHBOOKS_CLIENT_SECRET. Set it via:\n  export FRESHBOOKS_CLIENT_SECRET=your_secret\n  or add it to ~/.fb/.env")
+        end
+        { "client_id" => client_id.strip, "client_secret" => client_secret.strip }
+      end
+```
+
+- [ ] **Step 4: Update setup_config in auth.rb**
+
+Replace the `setup_config` method (lines 71-96) — write to `.env` instead of `config.json`:
+
+```ruby
+      def setup_config
+        puts "Welcome to FreshBooks CLI setup!\n\n"
+        puts "You need a FreshBooks Developer App. Create one at:"
+        puts "  https://my.freshbooks.com/#/developer\n\n"
+        puts "Set the redirect URI to: #{REDIRECT_URI}\n\n"
+        puts "Required scopes:"
+        puts "  user:profile:read          (enabled by default)"
+        puts "  user:clients:read"
+        puts "  user:projects:read"
+        puts "  user:billable_items:read"
+        puts "  user:time_entries:read"
+        puts "  user:time_entries:write\n\n"
+
+        print "Client ID: "
+        client_id = $stdin.gets&.strip
+        abort("Aborted.") if client_id.nil? || client_id.empty?
+
+        print "Client Secret: "
+        client_secret = IO.console.getpass("")
+        abort("Aborted.") if client_secret.nil? || client_secret.empty?
+
+        env_path = File.join(data_dir, ".env")
+        if File.exist?(env_path) && File.read(env_path).match?(/^FRESHBOOKS_CLIENT_(ID|SECRET)=/)
+          print "\nCredentials already exist in #{env_path}. Overwrite? (y/n): "
+          answer = $stdin.gets&.strip&.downcase
+          if answer == "y"
+            lines = File.readlines(env_path).reject { |l| l.match?(/^FRESHBOOKS_CLIENT_(ID|SECRET)=/) }
+            lines << "FRESHBOOKS_CLIENT_ID=#{client_id}\n"
+            lines << "FRESHBOOKS_CLIENT_SECRET=#{client_secret}\n"
+            File.write(env_path, lines.join)
+          else
+            puts "Credentials not updated."
+            return { "client_id" => client_id, "client_secret" => client_secret }
+          end
+        else
+          write_credentials_to_env(env_path, client_id, client_secret)
+        end
+
+        puts "\nCredentials saved to #{env_path}"
+        { "client_id" => client_id, "client_secret" => client_secret }
+      end
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+Run: `rspec spec/fb/auth_spec.rb -e "setup_config"`
+Expected: PASS
+
+- [ ] **Step 6: Run full test suite**
+
+Run: `rspec`
+Expected: All tests pass
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add lib/fb/auth.rb spec/fb/auth_spec.rb
+git commit -m "feat(auth): write credentials to .env in setup, not config.json"
+```
+
+---
+
 ### Task 8: Final verification
 
 - [ ] **Step 1: Run full test suite**
