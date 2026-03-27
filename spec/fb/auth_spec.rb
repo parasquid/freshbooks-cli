@@ -229,7 +229,7 @@ RSpec.describe FB::Auth do
       }
       When(:result) { FB::Auth.setup_config_from_args }
       Then { result == { "client_id" => "env_id", "client_secret" => "env_secret" } }
-      And  { File.exist?(FB::Auth.config_path) }
+      And  { !File.exist?(FB::Auth.config_path) }
     end
 
     context "with .env file in data_dir" do
@@ -278,7 +278,9 @@ RSpec.describe FB::Auth do
   # --- Interactive Setup with Masked Secret ---
 
   describe ".setup_config" do
-    context "masks client secret input" do
+    let(:env_path) { File.join(FB::Auth.data_dir, ".env") }
+
+    context "writes credentials to ~/.fb/.env" do
       Given {
         allow($stdin).to receive(:gets).and_return("my_client_id\n")
         console_double = instance_double(IO)
@@ -290,12 +292,23 @@ RSpec.describe FB::Auth do
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
       When { capture_stdout { FB::Auth.setup_config } }
-      Then {
-        ENV["FRESHBOOKS_CLIENT_ID"] = "my_client_id"
-        ENV["FRESHBOOKS_CLIENT_SECRET"] = "my_secret"
-        FB::Auth.load_config["client_id"] == "my_client_id"
+      Then { File.exist?(env_path) }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=my_client_id") }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=my_secret") }
+    end
+
+    context "prompts to overwrite when credentials already exist" do
+      Given {
+        FileUtils.mkdir_p(FB::Auth.data_dir)
+        File.write(env_path, "FRESHBOOKS_CLIENT_ID=old_id\nFRESHBOOKS_CLIENT_SECRET=old_sec\n")
+        allow($stdin).to receive(:gets).and_return("new_id\n", "y\n")
+        console_double = instance_double(IO)
+        allow(IO).to receive(:console).and_return(console_double)
+        allow(console_double).to receive(:getpass).with("").and_return("new_sec")
       }
-      And  { FB::Auth.load_config["client_secret"] == "my_secret" }
+      When { capture_stdout { FB::Auth.setup_config } }
+      Then { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=new_id") }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=new_sec") }
     end
   end
 

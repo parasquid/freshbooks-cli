@@ -96,10 +96,21 @@ module FB
         client_secret = IO.console.getpass("")
         abort("Aborted.") if client_secret.nil? || client_secret.empty?
 
-        config = { "client_id" => client_id, "client_secret" => client_secret }
-        save_config(config)
-        puts "\nConfig saved to #{config_path}"
-        config
+        env_path = File.join(data_dir, ".env")
+        if File.exist?(env_path) && File.read(env_path).match?(/^FRESHBOOKS_CLIENT_ID=/)
+          print "\nCredentials already exist in #{env_path}. Overwrite? (y/n): "
+          answer = $stdin.gets&.strip&.downcase
+          abort("Aborted.") unless answer == "y"
+          contents = File.read(env_path)
+          contents = contents.gsub(/^FRESHBOOKS_CLIENT_ID=.*$/, "FRESHBOOKS_CLIENT_ID=#{client_id}")
+          contents = contents.gsub(/^FRESHBOOKS_CLIENT_SECRET=.*$/, "FRESHBOOKS_CLIENT_SECRET=#{client_secret}")
+          File.write(env_path, contents)
+        else
+          write_credentials_to_env(env_path, client_id, client_secret)
+        end
+
+        puts "\nCredentials saved to #{env_path}"
+        { "client_id" => client_id, "client_secret" => client_secret }
       end
 
       def load_dotenv
@@ -151,9 +162,7 @@ module FB
           abort("Missing FRESHBOOKS_CLIENT_SECRET. Set it via:\n  export FRESHBOOKS_CLIENT_SECRET=your_secret\n  or add it to ~/.fb/.env")
         end
 
-        config = { "client_id" => client_id.strip, "client_secret" => client_secret.strip }
-        save_config(config)
-        config
+        { "client_id" => client_id.strip, "client_secret" => client_secret.strip }
       end
 
       def authorize_url(config)
