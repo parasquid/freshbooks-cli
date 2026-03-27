@@ -92,3 +92,59 @@ client_secret = IO.console.getpass("")
 - **Missing credentials:** Verify abort message mentions both env vars and `.env` file
 - **Interactive masking:** Stub `IO.console` to return a test value
 - **Existing tests:** Update to remove references to `--client-id`/`--client-secret` flags
+
+---
+
+## Amendment: Credential Storage Separation
+
+**Date:** 2026-03-27
+
+### Problem
+
+After initial implementation, credentials (`client_id`, `client_secret`) are still written to `config.json` alongside `business_id` and `account_id`. This means secrets live in a plain JSON file rather than the `.env` file designed for them.
+
+### Design
+
+#### Storage split
+
+- `~/.fb/.env` — `FRESHBOOKS_CLIENT_ID`, `FRESHBOOKS_CLIENT_SECRET` (credentials only, never in `config.json`)
+- `~/.fb/config.json` — `business_id`, `account_id` only
+
+#### Changes to `auth.rb`
+
+**`load_dotenv`** — extended with a migration step: if `config.json` has `client_id`/`client_secret`, move them to `~/.fb/.env`, then strip from `config.json`. Migration rules for `.env`:
+- File doesn't exist → create with both keys
+- File exists, keys missing → append
+- File exists, keys present → leave as-is (already migrated)
+
+Migration is silent and automatic on every run.
+
+**`load_config`** — merges ENV vars + `config.json`. Returns the same `{"client_id", "client_secret", "business_id", "account_id"}` hash — all callers remain unchanged.
+
+**`save_config`** — strips `client_id`/`client_secret` before writing, so credentials can never accidentally land in `config.json`.
+
+**`setup_config_from_args`** — no longer writes to `config.json`. Returns the credentials hash in memory only for use during the OAuth flow.
+
+**`setup_config` (interactive)** — writes credentials to `~/.fb/.env` instead of `config.json`:
+- File doesn't exist → create with both keys
+- File exists, keys missing → append
+- File exists, keys present → ask user "Overwrite existing credentials? (y/n)", update only those two keys if yes
+
+**Auth failure messaging** — when `refresh_token!` or `exchange_code` fails with an auth error, message tells the user to update credentials in `~/.fb/.env`.
+
+#### Files to change
+
+| File | Change |
+|------|--------|
+| `lib/fb/auth.rb` | Add `migrate_credentials_from_config`, `write_credentials_to_env`; update `load_dotenv`, `load_config`, `save_config`, `setup_config_from_args`, `setup_config`, auth failure messages |
+| `spec/fb/auth_spec.rb` | Add migration tests, `.env` write tests, `load_config` merge tests |
+
+#### Testing
+
+- **Migration:** `config.json` with credentials → `load_dotenv` moves them to `.env`, strips from `config.json`
+- **Migration append:** `.env` exists without keys → keys appended
+- **Migration skip:** `.env` exists with keys → no change
+- **`load_config` merge:** credentials in ENV, `business_id`/`account_id` in `config.json` → returns full hash
+- **`save_config` strips credentials:** calling `save_config` with a hash containing credentials → `config.json` never contains them
+- **Interactive setup writes `.env`:** `setup_config` → credentials in `~/.fb/.env`, not `config.json`
+- **Overwrite prompt:** `setup_config` when `.env` already has keys → prompts user before overwriting
