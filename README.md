@@ -93,6 +93,11 @@ fb auth setup
 cp .env.example ~/.fb/.env   # edit with your credentials
 fb auth setup
 
+# Credentials are stored in ~/.fb/.env — never in config.json.
+# config.json holds only business_id and account_id.
+# If you have an older install with credentials in config.json,
+# they are migrated to ~/.fb/.env automatically on first run.
+
 # Get the authorization URL
 fb auth url                    # prints URL to stdout
 fb auth url --format json      # {"url": "..."}
