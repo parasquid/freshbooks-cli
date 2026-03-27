@@ -81,7 +81,7 @@ All commands support `--format json` (global class option). Mutation commands (`
 
 ## Planning & Issue Tracking
 
-- Design specs and implementation plans go in `doc/plans/` — nowhere else.
+- Design specs and implementation plans go in `docs/plans/` — nowhere else.
 - When creating a plan, the first task should be updating the related GitHub issue with the full contents of the design spec only (not the implementation plan, not just links).
 - If there is no GitHub issue for the work, suggest creating one and upload the plan to the newly created issue.
 - The last task in a plan should be updating or creating documentation as necessary (README, AGENTS.md, etc.).
