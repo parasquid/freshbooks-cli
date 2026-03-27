@@ -1050,3 +1050,47 @@ echo "FRESHBOOKS_CLIENT_ID=test2\nFRESHBOOKS_CLIENT_SECRET=test2" > ~/.fb/.env
 fb auth setup
 fb auth status
 ```
+
+---
+
+### Task 13: Update documentation for credential storage separation
+
+**Files:**
+- Modify: `README.md`
+- Modify: `AGENTS.md`
+- Modify: `skills/freshbooks/SKILL.md`
+
+- [ ] **Step 1: Update README credential setup section**
+
+Find any README section describing where credentials are stored. Update to reflect:
+- Credentials (`client_id`, `client_secret`) are stored in `~/.fb/.env` only, never in `config.json`
+- `config.json` holds only `business_id` and `account_id`
+- Existing credentials in `config.json` are migrated automatically to `~/.fb/.env` on first run
+
+Example wording for the credential storage note:
+
+```markdown
+Credentials (`FRESHBOOKS_CLIENT_ID`, `FRESHBOOKS_CLIENT_SECRET`) are stored in `~/.fb/.env`,
+not in `config.json`. If you have an older install with credentials in `config.json`, they
+are migrated automatically to `~/.fb/.env` on first run.
+```
+
+- [ ] **Step 2: Update AGENTS.md auth section**
+
+In the Auth Flow section of `AGENTS.md`, update to document:
+- `fb auth setup` writes credentials to `~/.fb/.env`, not `config.json`
+- `config.json` stores only `business_id` and `account_id`
+- `load_config` merges `~/.fb/.env` (credentials) + `config.json` (business info)
+- `save_config` never writes `client_id`/`client_secret`
+- Auto-migration: credentials found in `config.json` are moved to `~/.fb/.env` silently on startup
+
+- [ ] **Step 3: Update skills/freshbooks/SKILL.md**
+
+In the auth state machine step for `config_exists: false`, verify the setup instruction matches the new behavior (credentials written to `~/.fb/.env` on `fb auth setup`). No change needed if it already says to set env vars or use `~/.fb/.env`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add README.md AGENTS.md skills/freshbooks/SKILL.md
+git commit -m "docs: document credential storage separation (credentials in ~/.fb/.env)"
+```
