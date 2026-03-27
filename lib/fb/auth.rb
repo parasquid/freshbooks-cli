@@ -95,11 +95,29 @@ module FB
         config
       end
 
-      def setup_config_from_args(client_id, client_secret)
-        abort("Missing --client-id") if client_id.nil? || client_id.empty?
-        abort("Missing --client-secret") if client_secret.nil? || client_secret.empty?
+      def load_dotenv
+        dot_env_paths = [
+          File.join(data_dir, ".env"),
+          File.join(Dir.pwd, ".env")
+        ].select { |p| File.exist?(p) }
+        Dotenv.load(*dot_env_paths) unless dot_env_paths.empty?
+      end
 
-        config = { "client_id" => client_id, "client_secret" => client_secret }
+      def setup_config_from_args
+        load_dotenv
+
+        client_id = ENV["FRESHBOOKS_CLIENT_ID"]
+        client_secret = ENV["FRESHBOOKS_CLIENT_SECRET"]
+
+        if client_id.nil? || client_id.strip.empty?
+          abort("Missing FRESHBOOKS_CLIENT_ID. Set it via:\n  export FRESHBOOKS_CLIENT_ID=your_id\n  or add it to ~/.fb/.env")
+        end
+
+        if client_secret.nil? || client_secret.strip.empty?
+          abort("Missing FRESHBOOKS_CLIENT_SECRET. Set it via:\n  export FRESHBOOKS_CLIENT_SECRET=your_secret\n  or add it to ~/.fb/.env")
+        end
+
+        config = { "client_id" => client_id.strip, "client_secret" => client_secret.strip }
         save_config(config)
         config
       end

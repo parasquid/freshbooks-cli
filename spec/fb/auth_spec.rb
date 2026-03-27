@@ -126,22 +126,62 @@ RSpec.describe FB::Auth do
     end
   end
 
-  # --- Setup Config From Args ---
+  # --- Setup Config From Args (env vars) ---
 
   describe ".setup_config_from_args" do
-    context "with valid args" do
-      When(:result) { FB::Auth.setup_config_from_args("id1", "sec1") }
-      Then { result == { "client_id" => "id1", "client_secret" => "sec1" } }
+    context "with env vars set" do
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "env_id"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "env_secret"
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
+      When(:result) { FB::Auth.setup_config_from_args }
+      Then { result == { "client_id" => "env_id", "client_secret" => "env_secret" } }
       And  { File.exist?(FB::Auth.config_path) }
     end
 
-    context "with nil client_id" do
-      When(:result) { FB::Auth.setup_config_from_args(nil, "sec1") }
+    context "with .env file in data_dir" do
+      Given {
+        FileUtils.mkdir_p(FB::Auth.data_dir)
+        File.write(File.join(FB::Auth.data_dir, ".env"), "FRESHBOOKS_CLIENT_ID=dotenv_id\nFRESHBOOKS_CLIENT_SECRET=dotenv_secret\n")
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
+      When(:result) { FB::Auth.setup_config_from_args }
+      Then { result == { "client_id" => "dotenv_id", "client_secret" => "dotenv_secret" } }
+    end
+
+    context "with missing FRESHBOOKS_CLIENT_ID" do
+      Given {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "sec"
+      }
+      after { ENV.delete("FRESHBOOKS_CLIENT_SECRET") }
+      When(:result) { FB::Auth.setup_config_from_args }
       Then { result == Failure(SystemExit) }
     end
 
-    context "with empty client_secret" do
-      When(:result) { FB::Auth.setup_config_from_args("id1", "") }
+    context "with missing FRESHBOOKS_CLIENT_SECRET" do
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "id"
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
+      after { ENV.delete("FRESHBOOKS_CLIENT_ID") }
+      When(:result) { FB::Auth.setup_config_from_args }
+      Then { result == Failure(SystemExit) }
+    end
+
+    context "with no env vars and no .env file" do
+      Given {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
+      When(:result) { FB::Auth.setup_config_from_args }
       Then { result == Failure(SystemExit) }
     end
   end
