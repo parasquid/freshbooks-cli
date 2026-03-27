@@ -86,7 +86,7 @@ module FB
         abort("Aborted.") if client_id.nil? || client_id.empty?
 
         print "Client Secret: "
-        client_secret = $stdin.gets&.strip
+        client_secret = IO.console.getpass("")
         abort("Aborted.") if client_secret.nil? || client_secret.empty?
 
         config = { "client_id" => client_id, "client_secret" => client_secret }

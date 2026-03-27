@@ -186,6 +186,22 @@ RSpec.describe FB::Auth do
     end
   end
 
+  # --- Interactive Setup with Masked Secret ---
+
+  describe ".setup_config" do
+    context "masks client secret input" do
+      Given {
+        allow($stdin).to receive(:gets).and_return("my_client_id\n")
+        console_double = instance_double(IO)
+        allow(IO).to receive(:console).and_return(console_double)
+        allow(console_double).to receive(:getpass).with("").and_return("my_secret")
+      }
+      When { capture_stdout { FB::Auth.setup_config } }
+      Then { FB::Auth.load_config["client_id"] == "my_client_id" }
+      And  { FB::Auth.load_config["client_secret"] == "my_secret" }
+    end
+  end
+
   # --- Authorize URL ---
 
   describe ".authorize_url" do
@@ -322,4 +338,13 @@ RSpec.describe FB::Auth do
       JSON.parse(File.read(FB::Auth.cache_path)) == { "updated_at" => 100 }
     }
   end
+end
+
+def capture_stdout
+  original = $stdout
+  $stdout = StringIO.new
+  yield
+  $stdout.string
+ensure
+  $stdout = original
 end
