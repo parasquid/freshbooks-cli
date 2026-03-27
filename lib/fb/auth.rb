@@ -103,6 +103,19 @@ module FB
         Dotenv.load(*dot_env_paths) unless dot_env_paths.empty?
       end
 
+      def write_credentials_to_env(env_path, client_id, client_secret)
+        ensure_data_dir
+        if File.exist?(env_path)
+          contents = File.read(env_path)
+          append = ""
+          append += "FRESHBOOKS_CLIENT_ID=#{client_id}\n" unless contents.match?(/^FRESHBOOKS_CLIENT_ID=/)
+          append += "FRESHBOOKS_CLIENT_SECRET=#{client_secret}\n" unless contents.match?(/^FRESHBOOKS_CLIENT_SECRET=/)
+          File.open(env_path, "a") { |f| f.write(append) } unless append.empty?
+        else
+          File.write(env_path, "FRESHBOOKS_CLIENT_ID=#{client_id}\nFRESHBOOKS_CLIENT_SECRET=#{client_secret}\n")
+        end
+      end
+
       def setup_config_from_args
         load_dotenv
 

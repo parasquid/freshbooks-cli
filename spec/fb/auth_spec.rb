@@ -126,6 +126,39 @@ RSpec.describe FB::Auth do
     end
   end
 
+  # --- Write Credentials to .env ---
+
+  describe ".write_credentials_to_env" do
+    let(:env_path) { File.join(FB::Auth.data_dir, ".env") }
+
+    context "when .env does not exist" do
+      When { FB::Auth.write_credentials_to_env(env_path, "my_id", "my_secret") }
+      Then { File.exist?(env_path) }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=my_id") }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=my_secret") }
+    end
+
+    context "when .env exists without the keys" do
+      Given {
+        FileUtils.mkdir_p(FB::Auth.data_dir)
+        File.write(env_path, "OTHER_VAR=other\n")
+      }
+      When { FB::Auth.write_credentials_to_env(env_path, "appended_id", "appended_secret") }
+      Then { File.read(env_path).include?("OTHER_VAR=other") }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=appended_id") }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=appended_secret") }
+    end
+
+    context "when .env exists with keys already present" do
+      Given {
+        FileUtils.mkdir_p(FB::Auth.data_dir)
+        File.write(env_path, "FRESHBOOKS_CLIENT_ID=existing_id\nFRESHBOOKS_CLIENT_SECRET=existing_secret\n")
+      }
+      When { FB::Auth.write_credentials_to_env(env_path, "new_id", "new_secret") }
+      Then { File.read(env_path) == "FRESHBOOKS_CLIENT_ID=existing_id\nFRESHBOOKS_CLIENT_SECRET=existing_secret\n" }
+    end
+  end
+
   # --- Setup Config From Args (env vars) ---
 
   describe ".setup_config_from_args" do
