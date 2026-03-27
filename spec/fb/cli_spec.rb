@@ -734,9 +734,17 @@ RSpec.describe FB::Cli do
   # --- auth subcommands ---
 
   describe "auth" do
-    context "setup with --client-id and --client-secret" do
+    context "setup with env vars" do
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "test_id"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "test_sec"
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
       When(:output) {
-        capture_stdout { FB::Cli.start(["auth", "setup", "--client-id", "test_id", "--client-secret", "test_sec"]) }
+        capture_stdout { FB::Cli.start(["auth", "setup"]) }
       }
       Then { output.include?("Config saved") }
       And  {
@@ -746,8 +754,16 @@ RSpec.describe FB::Cli do
     end
 
     context "setup with --format json" do
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "test_id"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "test_sec"
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
       When(:output) {
-        capture_stdout { FB::Cli.start(["auth", "setup", "--client-id", "test_id", "--client-secret", "test_sec", "--format", "json"]) }
+        capture_stdout { FB::Cli.start(["auth", "setup", "--format", "json"]) }
       }
       Then {
         json = JSON.parse(output)
@@ -755,9 +771,13 @@ RSpec.describe FB::Cli do
       }
     end
 
-    context "setup missing --client-id aborts" do
+    context "setup missing env vars aborts" do
+      Given {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
       When(:result) {
-        capture_stdout { FB::Cli.start(["auth", "setup", "--client-secret", "sec"]) }
+        capture_stdout { FB::Cli.start(["auth", "setup"]) }
       }
       Then { result == Failure(SystemExit) }
     end
