@@ -4,6 +4,7 @@ require "thor"
 require "json"
 require "date"
 require "io/console"
+require "stringio"
 
 module FB
   class Cli < Thor
@@ -14,11 +15,38 @@ module FB
     class_option :no_interactive, type: :boolean, default: false, desc: "Disable interactive prompts (auto-detected when not a TTY)"
     class_option :interactive, type: :boolean, default: false, desc: "Force interactive mode even when not a TTY"
     class_option :format, type: :string, desc: "Output format: table (default) or json"
+    class_option :dry_run, type: :boolean, default: false, desc: "Simulate command without making network calls"
 
     no_commands do
       def invoke_command(command, *args)
         Spinner.interactive = interactive?
-        super
+        return super unless options[:dry_run]
+
+        Thread.current[:fb_dry_run] = true
+        $stderr.puts "[DRY RUN] No changes will be made."
+
+        if options[:format] == "json"
+          original_stdout = $stdout
+          buffer = StringIO.new
+          $stdout = buffer
+          begin
+            super
+          ensure
+            $stdout = original_stdout
+          end
+          begin
+            data = JSON.parse(buffer.string)
+            meta = { "_dry_run" => { "simulated" => true } }
+            wrapped = data.is_a?(Array) ? meta.merge("data" => data) : data.merge(meta)
+            puts JSON.pretty_generate(wrapped)
+          rescue JSON::ParserError
+            print buffer.string
+          end
+        else
+          super
+        end
+      ensure
+        Thread.current[:fb_dry_run] = false
       end
     end
 
