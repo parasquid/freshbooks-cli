@@ -48,7 +48,7 @@ end
 
 Auth supports both interactive (single `fb auth` command) and non-interactive (subcommands) flows:
 
-- `fb auth setup --client-id ID --client-secret SECRET` — saves config
+- `fb auth setup` — saves config from `FRESHBOOKS_CLIENT_ID` and `FRESHBOOKS_CLIENT_SECRET` env vars (or `~/.fb/.env`)
 - `fb auth url` — prints OAuth URL
 - `fb auth callback REDIRECT_URL` — exchanges code for tokens, auto-selects single business
 - `fb auth status` — shows current auth state
@@ -73,6 +73,18 @@ All commands support `--format json` (global class option). Mutation commands (`
 - Config, tokens, defaults, cache are all separate JSON files under `Auth.data_dir`
 - `Auth.data_dir=` is the seam for test isolation — point it at a tmpdir
 - Docker wrapper (`./fb`) runs CLI in container with `.fb/` bind-mounted and host `TZ` passed through
+
+## Branch & PR Naming
+
+- **Branches:** `{issue-number}-{issue-title}` (GitHub default convention, title converted to lowercase with hyphens). Example: `4-secure-credential-input`
+- **PR titles:** `type(scope): description` (Conventional Commits style). Example: `feat(auth): add env var credential input`
+
+## Planning & Issue Tracking
+
+- Design specs and implementation plans go in `doc/plans/` — nowhere else.
+- When creating a plan, the first task should be updating the related GitHub issue with the full contents of the design spec only (not the implementation plan, not just links).
+- If there is no GitHub issue for the work, suggest creating one and upload the plan to the newly created issue.
+- The last task in a plan should be updating or creating documentation as necessary (README, AGENTS.md, etc.).
 
 ## FreshBooks API Gotchas
 
