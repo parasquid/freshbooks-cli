@@ -96,11 +96,25 @@ module FB
       end
 
       def load_dotenv
+        migrate_credentials_from_config
         dot_env_paths = [
           File.join(data_dir, ".env"),
           File.join(Dir.pwd, ".env")
         ].select { |p| File.exist?(p) }
         Dotenv.load(*dot_env_paths) unless dot_env_paths.empty?
+      end
+
+      def migrate_credentials_from_config
+        return unless File.exist?(config_path)
+        contents = File.read(config_path).strip
+        return if contents.empty?
+        config = JSON.parse(contents) rescue {}
+        client_id = config["client_id"]
+        client_secret = config["client_secret"]
+        return unless client_id || client_secret
+        write_credentials_to_env(File.join(data_dir, ".env"), client_id.to_s, client_secret.to_s)
+        safe_config = config.reject { |k, _| ["client_id", "client_secret"].include?(k) }
+        File.write(config_path, JSON.pretty_generate(safe_config) + "\n")
       end
 
       def write_credentials_to_env(env_path, client_id, client_secret)

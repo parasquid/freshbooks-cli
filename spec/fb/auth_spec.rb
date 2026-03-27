@@ -126,6 +126,49 @@ RSpec.describe FB::Auth do
     end
   end
 
+  # --- Migrate Credentials from Config ---
+
+  describe ".migrate_credentials_from_config" do
+    let(:env_path) { File.join(FB::Auth.data_dir, ".env") }
+
+    context "when config.json has client_id and client_secret" do
+      Given {
+        FileUtils.mkdir_p(FB::Auth.data_dir)
+        File.write(FB::Auth.config_path, JSON.generate("client_id" => "old_id", "client_secret" => "old_sec", "business_id" => 42))
+      }
+      When { FB::Auth.migrate_credentials_from_config }
+      Then { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=old_id") }
+      And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=old_sec") }
+      And  { !JSON.parse(File.read(FB::Auth.config_path)).key?("client_id") }
+      And  { !JSON.parse(File.read(FB::Auth.config_path)).key?("client_secret") }
+      And  { JSON.parse(File.read(FB::Auth.config_path))["business_id"] == 42 }
+    end
+
+    context "when .env already has the keys" do
+      Given {
+        FileUtils.mkdir_p(FB::Auth.data_dir)
+        File.write(env_path, "FRESHBOOKS_CLIENT_ID=existing\nFRESHBOOKS_CLIENT_SECRET=existing_sec\n")
+        File.write(FB::Auth.config_path, JSON.generate("client_id" => "old_id", "client_secret" => "old_sec"))
+      }
+      When { FB::Auth.migrate_credentials_from_config }
+      Then { File.read(env_path) == "FRESHBOOKS_CLIENT_ID=existing\nFRESHBOOKS_CLIENT_SECRET=existing_sec\n" }
+    end
+
+    context "when config.json has no credentials" do
+      Given {
+        FileUtils.mkdir_p(FB::Auth.data_dir)
+        File.write(FB::Auth.config_path, JSON.generate("business_id" => 7))
+      }
+      When { FB::Auth.migrate_credentials_from_config }
+      Then { !File.exist?(env_path) }
+    end
+
+    context "when config.json does not exist" do
+      When(:result) { FB::Auth.migrate_credentials_from_config }
+      Then { result.nil? }
+    end
+  end
+
   # --- Write Credentials to .env ---
 
   describe ".write_credentials_to_env" do
