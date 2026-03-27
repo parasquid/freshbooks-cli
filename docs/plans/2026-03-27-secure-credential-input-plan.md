@@ -18,7 +18,7 @@ Update the body of GitHub issue #4 to include the full contents of both the desi
 
 Run:
 ```bash
-gh issue edit 4 --body "$(cat doc/plans/2026-03-27-secure-credential-input-design.md; echo -e '\n\n---\n\n'; cat doc/plans/2026-03-27-secure-credential-input-plan.md)"
+gh issue edit 4 --body "$(cat docs/plans/2026-03-27-secure-credential-input-design.md; echo -e '\n\n---\n\n'; cat docs/plans/2026-03-27-secure-credential-input-plan.md)"
 ```
 
 ---
