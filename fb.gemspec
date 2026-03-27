@@ -25,6 +25,7 @@ Gem::Specification.new do |s|
 
   s.add_dependency "thor", "~> 1.3"
   s.add_dependency "httparty", ">= 0.24", "< 1.0"
+  s.add_dependency "dotenv", "~> 3.1"
 
   s.add_development_dependency "rspec", "~> 3.12"
   s.add_development_dependency "rspec-given"

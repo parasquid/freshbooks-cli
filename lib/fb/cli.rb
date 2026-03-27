@@ -32,12 +32,10 @@ module FB
     # --- auth ---
 
     desc "auth [SUBCOMMAND] [ARGS]", "Authenticate with FreshBooks via OAuth2 (subcommands: setup, url, callback, status)"
-    method_option :client_id, type: :string, desc: "OAuth client ID (for setup)"
-    method_option :client_secret, type: :string, desc: "OAuth client secret (for setup)"
     def auth(subcommand = nil, *args)
       case subcommand
       when "setup"
-        config = Auth.setup_config_from_args(options[:client_id], options[:client_secret])
+        config = Auth.setup_config_from_args
         if options[:format] == "json"
           puts JSON.pretty_generate({ "config_path" => Auth.config_path, "status" => "saved" })
         else
@@ -46,7 +44,7 @@ module FB
 
       when "url"
         config = Auth.load_config
-        abort("No config found. Run: fb auth setup --client-id ID --client-secret SECRET") unless config
+        abort("No config found. Run: fb auth setup (set FRESHBOOKS_CLIENT_ID and FRESHBOOKS_CLIENT_SECRET first)") unless config
         url = Auth.authorize_url(config)
         if options[:format] == "json"
           puts JSON.pretty_generate({ "url" => url })
@@ -56,7 +54,7 @@ module FB
 
       when "callback"
         config = Auth.load_config
-        abort("No config found. Run: fb auth setup --client-id ID --client-secret SECRET") unless config
+        abort("No config found. Run: fb auth setup (set FRESHBOOKS_CLIENT_ID and FRESHBOOKS_CLIENT_SECRET first)") unless config
         redirect_url = args.first
         abort("Usage: fb auth callback REDIRECT_URL") unless redirect_url
         code = Auth.extract_code_from_url(redirect_url)
@@ -973,15 +971,12 @@ module FB
             usage: "fb auth [SUBCOMMAND]",
             interactive: "Interactive when no subcommand; subcommands are non-interactive",
             subcommands: {
-              "setup" => "Save OAuth credentials: fb auth setup --client-id ID --client-secret SECRET",
+              "setup" => "Save OAuth credentials from env vars: FRESHBOOKS_CLIENT_ID, FRESHBOOKS_CLIENT_SECRET (or ~/.fb/.env)",
               "url" => "Print the OAuth authorization URL",
               "callback" => "Exchange OAuth code: fb auth callback REDIRECT_URL",
               "status" => "Show current auth state (config, tokens, business)"
             },
-            flags: {
-              "--client-id" => "OAuth client ID (for setup subcommand)",
-              "--client-secret" => "OAuth client secret (for setup subcommand)"
-            }
+            flags: {}
           },
           business: {
             description: "List or select a business",

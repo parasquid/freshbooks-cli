@@ -4,6 +4,7 @@ require "httparty"
 require "json"
 require "uri"
 require "fileutils"
+require "dotenv"
 
 module FB
   class Auth
@@ -52,19 +53,26 @@ module FB
       # --- Config ---
 
       def load_config
-        return nil unless File.exist?(config_path)
-        contents = File.read(config_path).strip
-        return nil if contents.empty?
-        config = JSON.parse(contents)
-        return nil unless config["client_id"] && config["client_secret"]
+        load_dotenv
+        client_id = ENV["FRESHBOOKS_CLIENT_ID"]&.strip
+        client_secret = ENV["FRESHBOOKS_CLIENT_SECRET"]&.strip
+        return nil if client_id.nil? || client_id.empty? || client_secret.nil? || client_secret.empty?
+        config = { "client_id" => client_id, "client_secret" => client_secret }
+        if File.exist?(config_path)
+          begin
+            file_config = JSON.parse(File.read(config_path).strip)
+            config["business_id"] = file_config["business_id"] if file_config["business_id"]
+            config["account_id"] = file_config["account_id"] if file_config["account_id"]
+          rescue JSON::ParserError
+          end
+        end
         config
-      rescue JSON::ParserError
-        nil
       end
 
       def save_config(config)
         ensure_data_dir
-        File.write(config_path, JSON.pretty_generate(config) + "\n")
+        safe_config = config.reject { |k, _| ["client_id", "client_secret"].include?(k) }
+        File.write(config_path, JSON.pretty_generate(safe_config) + "\n")
       end
 
       def setup_config
@@ -85,22 +93,76 @@ module FB
         abort("Aborted.") if client_id.nil? || client_id.empty?
 
         print "Client Secret: "
-        client_secret = $stdin.gets&.strip
+        client_secret = IO.console.getpass("")
         abort("Aborted.") if client_secret.nil? || client_secret.empty?
 
-        config = { "client_id" => client_id, "client_secret" => client_secret }
-        save_config(config)
-        puts "\nConfig saved to #{config_path}"
-        config
+        env_path = File.join(data_dir, ".env")
+        if File.exist?(env_path) && File.read(env_path).match?(/^FRESHBOOKS_CLIENT_ID=/)
+          print "\nCredentials already exist in #{env_path}. Overwrite? (y/n): "
+          answer = $stdin.gets&.strip&.downcase
+          abort("Aborted.") unless answer == "y"
+          contents = File.read(env_path)
+          contents = contents.gsub(/^FRESHBOOKS_CLIENT_ID=.*$/, "FRESHBOOKS_CLIENT_ID=#{client_id}")
+          contents = contents.gsub(/^FRESHBOOKS_CLIENT_SECRET=.*$/, "FRESHBOOKS_CLIENT_SECRET=#{client_secret}")
+          File.write(env_path, contents)
+        else
+          write_credentials_to_env(env_path, client_id, client_secret)
+        end
+
+        puts "\nCredentials saved to #{env_path}"
+        { "client_id" => client_id, "client_secret" => client_secret }
       end
 
-      def setup_config_from_args(client_id, client_secret)
-        abort("Missing --client-id") if client_id.nil? || client_id.empty?
-        abort("Missing --client-secret") if client_secret.nil? || client_secret.empty?
+      def load_dotenv
+        migrate_credentials_from_config
+        dot_env_paths = [
+          File.join(data_dir, ".env"),
+          File.join(Dir.pwd, ".env")
+        ].select { |p| File.exist?(p) }
+        Dotenv.load(*dot_env_paths) unless dot_env_paths.empty?
+      end
 
-        config = { "client_id" => client_id, "client_secret" => client_secret }
-        save_config(config)
-        config
+      def migrate_credentials_from_config
+        return unless File.exist?(config_path)
+        contents = File.read(config_path).strip
+        return if contents.empty?
+        config = JSON.parse(contents) rescue {}
+        client_id = config["client_id"]
+        client_secret = config["client_secret"]
+        return unless client_id || client_secret
+        write_credentials_to_env(File.join(data_dir, ".env"), client_id.to_s, client_secret.to_s)
+        safe_config = config.reject { |k, _| ["client_id", "client_secret"].include?(k) }
+        File.write(config_path, JSON.pretty_generate(safe_config) + "\n")
+      end
+
+      def write_credentials_to_env(env_path, client_id, client_secret)
+        ensure_data_dir
+        if File.exist?(env_path)
+          contents = File.read(env_path)
+          append = ""
+          append += "FRESHBOOKS_CLIENT_ID=#{client_id}\n" unless contents.match?(/^FRESHBOOKS_CLIENT_ID=/)
+          append += "FRESHBOOKS_CLIENT_SECRET=#{client_secret}\n" unless contents.match?(/^FRESHBOOKS_CLIENT_SECRET=/)
+          File.open(env_path, "a") { |f| f.write(append) } unless append.empty?
+        else
+          File.write(env_path, "FRESHBOOKS_CLIENT_ID=#{client_id}\nFRESHBOOKS_CLIENT_SECRET=#{client_secret}\n")
+        end
+      end
+
+      def setup_config_from_args
+        load_dotenv
+
+        client_id = ENV["FRESHBOOKS_CLIENT_ID"]
+        client_secret = ENV["FRESHBOOKS_CLIENT_SECRET"]
+
+        if client_id.nil? || client_id.strip.empty?
+          abort("Missing FRESHBOOKS_CLIENT_ID. Set it via:\n  export FRESHBOOKS_CLIENT_ID=your_id\n  or add it to ~/.fb/.env")
+        end
+
+        if client_secret.nil? || client_secret.strip.empty?
+          abort("Missing FRESHBOOKS_CLIENT_SECRET. Set it via:\n  export FRESHBOOKS_CLIENT_SECRET=your_secret\n  or add it to ~/.fb/.env")
+        end
+
+        { "client_id" => client_id.strip, "client_secret" => client_secret.strip }
       end
 
       def authorize_url(config)
