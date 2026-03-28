@@ -62,6 +62,18 @@ Auth supports both interactive (single `fb auth` command) and non-interactive (s
 - **`save_config`** — always strips `client_id`/`client_secret` before writing so they can never land in `config.json`.
 - **Migration** — if `config.json` contains `client_id`/`client_secret` from an older install, `load_dotenv` moves them to `~/.fb/.env` and strips them from `config.json` silently on every startup.
 
+### Dry-Run Mode
+
+All commands support `--dry-run` (global class option). When set:
+
+- Auth is bypassed — `valid_access_token` returns `"dry-run-token"`, `require_config` reads config.json directly without requiring credentials
+- Read API calls use cached data ignoring freshness (stale cache is acceptable); if cache is empty, reads return `[]`
+- Write API calls (`create_time_entry`, `update_time_entry`, `delete_time_entry`) return mock responses without hitting the network
+- A `[DRY RUN] No changes will be made.` banner is printed to stderr before the command runs
+- With `--format json`, all output is wrapped with `"_dry_run": {"simulated": true}` metadata; array results are nested under `"data"`
+
+Implementation uses `Thread.current[:fb_dry_run]` set in `invoke_command` with `ensure` cleanup. Dry-run guards are added as the first line of ~8 leaf methods in `Auth` and `Api`. All business logic (name map building, pagination, caching) runs unchanged through the same code paths.
+
 ### JSON Output
 
 All commands support `--format json` (global class option). Mutation commands (`log`, `edit`, `delete`) return the API response or structured confirmation. Read commands return data arrays or structured summaries.
