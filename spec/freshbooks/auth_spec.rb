@@ -526,6 +526,72 @@ RSpec.describe FreshBooks::CLI::Auth do
     Then { result["business_id"] == "0" }
     And  { result["account_id"] == "0" }
   end
+
+  # --- Data Directory Resolution ---
+
+  describe ".data_dir" do
+    before do
+      FreshBooks::CLI::Auth.data_dir = nil
+    end
+
+    after do
+      ENV.delete("FRESHBOOKS_HOME")
+      ENV.delete("XDG_CONFIG_HOME")
+      FreshBooks::CLI::Auth.data_dir = nil
+    end
+
+    context "when FRESHBOOKS_HOME is set" do
+      Given { ENV["FRESHBOOKS_HOME"] = "/custom/path" }
+      Then { FreshBooks::CLI::Auth.data_dir == "/custom/path" }
+    end
+
+    context "when legacy ~/.fb exists" do
+      Given do
+        allow(File).to receive(:exist?).and_call_original
+        allow(File).to receive(:exist?).with(File.join(Dir.home, ".fb")).and_return(true)
+      end
+      Then { FreshBooks::CLI::Auth.data_dir == File.join(Dir.home, ".fb") }
+    end
+
+    context "on macOS with no legacy path" do
+      Given do
+        allow(FreshBooks::CLI::Auth).to receive(:macos?).and_return(true)
+        allow(File).to receive(:exist?).and_call_original
+        allow(File).to receive(:exist?).with(File.join(Dir.home, ".fb")).and_return(false)
+      end
+      Then { FreshBooks::CLI::Auth.data_dir == File.join(Dir.home, "Library", "Application Support", "freshbooks") }
+    end
+
+    context "on Linux with XDG_CONFIG_HOME set and no legacy path" do
+      Given do
+        ENV["XDG_CONFIG_HOME"] = "/custom/config"
+        allow(FreshBooks::CLI::Auth).to receive(:macos?).and_return(false)
+        allow(File).to receive(:exist?).and_call_original
+        allow(File).to receive(:exist?).with(File.join(Dir.home, ".fb")).and_return(false)
+      end
+      Then { FreshBooks::CLI::Auth.data_dir == "/custom/config/freshbooks" }
+    end
+
+    context "on Linux with no XDG_CONFIG_HOME and no legacy path" do
+      Given do
+        allow(FreshBooks::CLI::Auth).to receive(:macos?).and_return(false)
+        allow(File).to receive(:exist?).and_call_original
+        allow(File).to receive(:exist?).with(File.join(Dir.home, ".fb")).and_return(false)
+      end
+      Then { FreshBooks::CLI::Auth.data_dir == File.join(Dir.home, ".config", "freshbooks") }
+    end
+
+    context "when data_dir= is set to nil it resets to auto-resolution" do
+      Given do
+        FreshBooks::CLI::Auth.data_dir = "/some/explicit/path"
+        FreshBooks::CLI::Auth.data_dir = nil
+        allow(FreshBooks::CLI::Auth).to receive(:macos?).and_return(false)
+        allow(File).to receive(:exist?).and_call_original
+        allow(File).to receive(:exist?).with(File.join(Dir.home, ".fb")).and_return(false)
+      end
+      Then { FreshBooks::CLI::Auth.data_dir == File.join(Dir.home, ".config", "freshbooks") }
+    end
+  end
 end
 
 def capture_stdout
