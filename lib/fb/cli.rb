@@ -991,7 +991,8 @@ module FB
         required_scopes: Auth::REQUIRED_SCOPES,
         global_flags: {
           "--no-interactive" => "Disable interactive prompts (auto-detected when not a TTY)",
-          "--format json" => "Output format: json (available on all commands)"
+          "--format json"    => "Output format: json (available on all commands)",
+          "--dry-run"        => "Simulate command without making network calls (writes skipped)"
         },
         commands: {
           auth: {

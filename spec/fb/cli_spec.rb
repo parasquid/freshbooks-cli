@@ -919,6 +919,15 @@ RSpec.describe FB::Cli do
     }
   end
 
+  # --- dry-run flag in help --format json ---
+
+  describe "help --format json includes --dry-run in global_flags" do
+    When(:output) {
+      capture_stdout { FB::Cli.start(["help", "--format", "json"]) }
+    }
+    Then { JSON.parse(output)["global_flags"].key?("--dry-run") }
+  end
+
   # --- dry-run banner ---
 
   describe "--dry-run banner" do
