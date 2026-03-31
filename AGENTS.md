@@ -10,7 +10,7 @@ docker compose build
 docker compose run --rm --entrypoint rspec fb
 
 # Run a single spec file
-docker compose run --rm --entrypoint rspec fb spec/fb/auth_spec.rb
+docker compose run --rm --entrypoint rspec fb spec/freshbooks/auth_spec.rb
 
 # Run locally (requires Ruby >= 3.0)
 gem build fb.gemspec && gem install freshbooks-cli-*.gem
@@ -22,12 +22,12 @@ rake release
 
 ## Architecture
 
-The gem is a single-module CLI (`FB`) built on Thor, with four components:
+The gem is a CLI (`FreshBooks::CLI`) built on Thor, with four components:
 
-- **Auth** (`lib/fb/auth.rb`) — OAuth2 flow, token management, config/cache/defaults persistence. All state stored as JSON files in `Auth.data_dir` (`~/.fb/` or `.fb/` in Docker). Tests redirect this to a tmpdir. Provides both interactive (`setup_config`, `authorize`, `discover_business`) and non-interactive (`setup_config_from_args`, `authorize_url`, `extract_code_from_url`, `exchange_code`, `fetch_businesses`, `select_business`, `auth_status`) methods.
-- **Api** (`lib/fb/api.rb`) — FreshBooks REST client. All HTTP goes through HTTParty. Paginated fetching via `fetch_all_pages`. Name maps (client/project/service ID → name) cached for 10 minutes in `cache.json`. Services are project-scoped — `build_name_maps` extracts them from project data, not just the global services endpoint.
-- **Cli** (`lib/fb/cli.rb`) — Thor subclass. Commands: `auth`, `business`, `log`, `entries`, `clients`, `projects`, `services`, `status`, `edit`, `delete`, `cache`, `help`, `version`. Interactive prompts read from `$stdin`. Interactive detection via `$stdin.tty?` + `--no-interactive` flag.
-- **Spinner** (`lib/fb/spinner.rb`) — Braille animation spinner. Yields to a block, returns block result. Globally stubbed in tests to just yield.
+- **Auth** (`lib/freshbooks/auth.rb`) — OAuth2 flow, token management, config/cache/defaults persistence. All state stored as JSON files in `FreshBooks::CLI::Auth.data_dir` (see resolution order below). Tests redirect this to a tmpdir. Provides both interactive (`setup_config`, `authorize`, `discover_business`) and non-interactive (`setup_config_from_args`, `authorize_url`, `extract_code_from_url`, `exchange_code`, `fetch_businesses`, `select_business`, `auth_status`) methods.
+- **Api** (`lib/freshbooks/api.rb`) — FreshBooks REST client. All HTTP goes through HTTParty. Paginated fetching via `fetch_all_pages`. Name maps (client/project/service ID → name) cached for 10 minutes in `cache.json`. Services are project-scoped — `build_name_maps` extracts them from project data, not just the global services endpoint.
+- **Commands** (`lib/freshbooks/cli.rb`) — Thor subclass (`FreshBooks::CLI::Commands`). Commands: `auth`, `business`, `log`, `entries`, `clients`, `projects`, `services`, `status`, `edit`, `delete`, `cache`, `help`, `version`. Interactive prompts read from `$stdin`. Interactive detection via `$stdin.tty?` + `--no-interactive` flag.
+- **Spinner** (`lib/freshbooks/spinner.rb`) — Braille animation spinner. Yields to a block, returns block result. Globally stubbed in tests to just yield.
 
 ### Interactive Detection
 
@@ -48,19 +48,30 @@ end
 
 Auth supports both interactive (single `fb auth` command) and non-interactive (subcommands) flows:
 
-- `fb auth setup` — writes credentials to `~/.fb/.env` (interactive: prompts with masked secret; non-interactive: reads from `FRESHBOOKS_CLIENT_ID`/`FRESHBOOKS_CLIENT_SECRET` env vars or `~/.fb/.env`)
+- `fb auth setup` — writes credentials to `<data_dir>/.env` (interactive: prompts with masked secret; non-interactive: reads from `FRESHBOOKS_CLIENT_ID`/`FRESHBOOKS_CLIENT_SECRET` env vars or `<data_dir>/.env`)
 - `fb auth url` — prints OAuth URL
 - `fb auth callback REDIRECT_URL` — exchanges code for tokens, auto-selects single business
 - `fb auth status` — shows current auth state
 - `fb business --select ID` — sets active business (required for multi-business accounts)
 
+### Config Directory Resolution
+
+`FreshBooks::CLI::Auth.data_dir` resolves in this order (first match wins):
+
+1. `FRESHBOOKS_HOME` env var — explicit override, highest priority
+2. `~/.fb` if it already exists — legacy migration path, preserves existing installs
+3. macOS: `~/Library/Application Support/freshbooks`
+4. Linux/other: `$XDG_CONFIG_HOME/freshbooks` (or `~/.config/freshbooks` if `XDG_CONFIG_HOME` is unset)
+
+The `data_dir=` setter still works for test isolation — point it at a tmpdir. Setting it to `nil` resets to auto-resolution.
+
 ### Credential Storage
 
-- **`~/.fb/.env`** — stores `FRESHBOOKS_CLIENT_ID` and `FRESHBOOKS_CLIENT_SECRET`. Never written to `config.json`.
-- **`~/.fb/config.json`** — stores `business_id` and `account_id` only. Credentials are stripped before writing.
-- **`load_config`** — merges ENV credentials (loaded from `~/.fb/.env` via dotenv) with `config.json` (business info). Returns the full config hash for all callers.
+- **`<data_dir>/.env`** — stores `FRESHBOOKS_CLIENT_ID` and `FRESHBOOKS_CLIENT_SECRET`. Never written to `config.json`.
+- **`<data_dir>/config.json`** — stores `business_id` and `account_id` only. Credentials are stripped before writing.
+- **`load_config`** — merges ENV credentials (loaded from `<data_dir>/.env` via dotenv) with `config.json` (business info). Returns the full config hash for all callers.
 - **`save_config`** — always strips `client_id`/`client_secret` before writing so they can never land in `config.json`.
-- **Migration** — if `config.json` contains `client_id`/`client_secret` from an older install, `load_dotenv` moves them to `~/.fb/.env` and strips them from `config.json` silently on every startup.
+- **Migration** — if `config.json` contains `client_id`/`client_secret` from an older install, `load_dotenv` moves them to `<data_dir>/.env` and strips them from `config.json` silently on every startup.
 
 ### Dry-Run Mode
 
@@ -72,7 +83,7 @@ All commands support `--dry-run` (global class option). When set:
 - A `[DRY RUN] No changes will be made.` banner is printed to stderr before the command runs
 - With `--format json`, all output is wrapped with `"_dry_run": {"simulated": true}` metadata; array results are nested under `"data"`
 
-Implementation uses `Thread.current[:fb_dry_run]` set in `invoke_command` with `ensure` cleanup. Dry-run guards are added as the first line of ~8 leaf methods in `Auth` and `Api`. All business logic (name map building, pagination, caching) runs unchanged through the same code paths.
+Implementation uses `Thread.current[:fb_dry_run]` set in `invoke_command` with `ensure` cleanup (intentionally unchanged internal detail — not tied to the module namespace). Dry-run guards are added as the first line of ~8 leaf methods in `FreshBooks::CLI::Auth` and `FreshBooks::CLI::Api`. All business logic (name map building, pagination, caching) runs unchanged through the same code paths.
 
 ### JSON Output
 
@@ -83,19 +94,20 @@ All commands support `--format json` (global class option). Mutation commands (`
 - **rspec-given** style: `Given`/`When`/`Then` blocks, not `describe`/`it`/`expect`
 - `Failure(SystemExit)` for testing `abort` calls
 - **webmock** stubs HTTP at the socket level — never stub HTTParty directly
-- **File I/O** uses real files in a tmpdir (spec_helper sets `Auth.data_dir` per test)
+- **File I/O** uses real files in a tmpdir (spec_helper sets `FreshBooks::CLI::Auth.data_dir = tmpdir` before each test and resets it with `FreshBooks::CLI::Auth.data_dir = nil` after — using the public setter, not `instance_variable_set`)
 - **Spinner** is stubbed globally in `spec_helper` to just yield (no threads in tests)
 - **$stdin** stubbed with `allow($stdin).to receive(:gets).and_return(...)` or `allow($stdin).to receive(:tty?).and_return(false)` for non-interactive tests
 
 ## Key Patterns
 
 - All modules use `class << self` (singleton methods only, no instances)
-- Config, tokens, defaults, cache are all separate JSON files under `Auth.data_dir`
-- `Auth.data_dir=` is the seam for test isolation — point it at a tmpdir
-- Docker wrapper (`./fb`) runs CLI in container with `.fb/` bind-mounted and host `TZ` passed through
+- Config, tokens, defaults, cache are all separate JSON files under `FreshBooks::CLI::Auth.data_dir`
+- `FreshBooks::CLI::Auth.data_dir=` is the seam for test isolation — point it at a tmpdir; set to `nil` to reset to auto-resolution. Resolution order: `FRESHBOOKS_HOME` env var → `~/.fb` (legacy) → platform-native default (macOS: `~/Library/Application Support/freshbooks`; Linux: `~/.config/freshbooks`)
+- Docker wrapper (`./fb`) runs CLI in container with the data directory bind-mounted and host `TZ` passed through
 
 ## Branch & PR Naming
 
+- **When starting new work based on a GitHub issue, always create a new branch before making any changes.**
 - **Branches:** `{issue-number}-{issue-title}` (GitHub default convention, title converted to lowercase with hyphens). Example: `4-secure-credential-input`
 - **PR titles:** `type(scope): description` (Conventional Commits style). Example: `feat(auth): add env var credential input`
 

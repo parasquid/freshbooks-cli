@@ -30,7 +30,7 @@ gem install freshbooks-cli-*.gem
 fb auth
 ```
 
-Both install `fb` to your PATH — runs natively, no Docker involved. Data stored in `~/.fb/`.
+Both install `fb` to your PATH — runs natively, no Docker involved. Data stored in `~/Library/Application Support/freshbooks/` (macOS) or `~/.config/freshbooks/` (Linux). Existing `~/.fb/` installs are detected automatically and continue to work unchanged.
 
 ## Setup
 
@@ -48,7 +48,7 @@ Running any command for the first time triggers setup:
 4. Enter your Client ID and Client Secret when prompted
 5. Complete the OAuth flow — your `business_id` and `account_id` are auto-discovered
 
-All data is stored in `~/.fb/` (or `.fb/` in the project directory when using Docker).
+Data is stored in a platform-native config directory: `~/Library/Application Support/freshbooks/` (macOS) or `~/.config/freshbooks/` (Linux). Override with `FRESHBOOKS_HOME=/path/to/dir`. Existing `~/.fb/` installs continue to work unchanged (or `.fb/` in the project directory when using Docker).
 
 ## Interactive vs Non-interactive Mode
 
@@ -90,13 +90,15 @@ export FRESHBOOKS_CLIENT_SECRET=YOUR_SECRET
 fb auth setup
 
 # Or use a .env file (recommended — keeps secrets out of shell history)
-cp .env.example ~/.fb/.env   # edit with your credentials
+# Copy to <data_dir>/.env — macOS: ~/Library/Application Support/freshbooks/.env
+#                           Linux: ~/.config/freshbooks/.env
+cp .env.example ~/.fb/.env   # if using legacy ~/.fb path
 fb auth setup
 
-# Credentials are stored in ~/.fb/.env — never in config.json.
+# Credentials are stored in <data_dir>/.env — never in config.json.
 # config.json holds only business_id and account_id.
 # If you have an older install with credentials in config.json,
-# they are migrated to ~/.fb/.env automatically on first run.
+# they are migrated to <data_dir>/.env automatically on first run.
 
 # Get the authorization URL
 fb auth url                    # prints URL to stdout
@@ -303,7 +305,7 @@ The CLI is designed to be fully scriptable. All commands support `--format json`
 command -v fb >/dev/null 2>&1
 fb auth status --format json
 
-# 1. Save credentials (via env vars or ~/.fb/.env)
+# 1. Save credentials (via env vars or <data_dir>/.env)
 export FRESHBOOKS_CLIENT_ID=YOUR_ID
 export FRESHBOOKS_CLIENT_SECRET=YOUR_SECRET
 fb auth setup
