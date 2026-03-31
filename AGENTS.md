@@ -102,9 +102,10 @@ All commands support `--format json` (global class option). Mutation commands (`
 ## Planning & Issue Tracking
 
 - Design specs and implementation plans go in `docs/plans/` — nowhere else.
-- When creating a plan, the first task should be updating the related GitHub issue with the full contents of the design spec only (not the implementation plan, not just links).
-- If there is no GitHub issue for the work, suggest creating one and upload the plan to the newly created issue.
-- The last task in a plan should be updating or creating ALL related documentation: README, AGENTS.md, and any skill files (e.g. `skills/*/SKILL.md`) that reference changed behavior or conventions.
+- **Every plan must include these two bookend tasks — no exceptions:**
+  - **Task 0 (first):** Post the full design spec to the related GitHub issue (not a link, not a summary — the full spec text). If no issue exists, create one first.
+  - **Last task:** Update or create ALL related documentation: README, AGENTS.md, and any skill files (e.g. `skills/*/SKILL.md`) that reference changed behavior or conventions.
+- These tasks must appear in the written plan and be executed like any other task.
 - **AGENTS.md must be self-contained.** Never reference local or global config files (e.g. `~/.claude/CLAUDE.md`, `settings.json`) — those are not available to other developers or agents running in different environments. All guidance belongs in this file directly.
 - **Answer simple commands directly.** When the user runs an informational command (`git branch`, `git status`, `git log`, etc.), output the result and stop. Do not add commentary, observations, or suggestions unless asked.
 - **Never include real user data in issues or PRs.** FreshBooks client names, entry IDs, project names, and any live API data must be replaced with generic placeholders (e.g. `"My Client"`, `<entry-id>`) before posting.
