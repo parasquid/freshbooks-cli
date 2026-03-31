@@ -66,8 +66,8 @@ Auth supports both interactive (single `fb auth` command) and non-interactive (s
 
 All commands support `--dry-run` (global class option). When set:
 
-- Auth is bypassed — `valid_access_token` returns `"dry-run-token"`, `require_config` reads config.json directly without requiring credentials
-- Read API calls use cached data ignoring freshness (stale cache is acceptable); if cache is empty, reads return `[]`
+- Auth is partially bypassed — `valid_access_token` returns the stored access token if one exists and is not expired; falls back to `"dry-run-token"` when unauthenticated. `require_config` reads config.json directly without requiring credentials
+- Most read API calls use cached data ignoring freshness (stale cache is acceptable); if cache is empty, reads return `[]`. Single-entry reads (`fetch_time_entry`) make a real API call using the available token, so `edit --dry-run` shows actual entry data when authenticated
 - Write API calls (`create_time_entry`, `update_time_entry`, `delete_time_entry`) return mock responses without hitting the network
 - A `[DRY RUN] No changes will be made.` banner is printed to stderr before the command runs
 - With `--format json`, all output is wrapped with `"_dry_run": {"simulated": true}` metadata; array results are nested under `"data"`
@@ -106,6 +106,7 @@ All commands support `--format json` (global class option). Mutation commands (`
 - If there is no GitHub issue for the work, suggest creating one and upload the plan to the newly created issue.
 - The last task in a plan should be updating or creating ALL related documentation: README, AGENTS.md, and any skill files (e.g. `skills/*/SKILL.md`) that reference changed behavior or conventions.
 - **AGENTS.md must be self-contained.** Never reference local or global config files (e.g. `~/.claude/CLAUDE.md`, `settings.json`) — those are not available to other developers or agents running in different environments. All guidance belongs in this file directly.
+- **Answer simple commands directly.** When the user runs an informational command (`git branch`, `git status`, `git log`, etc.), output the result and stop. Do not add commentary, observations, or suggestions unless asked.
 - **Never include real user data in issues or PRs.** FreshBooks client names, entry IDs, project names, and any live API data must be replaced with generic placeholders (e.g. `"My Client"`, `<entry-id>`) before posting.
 
 ## Skills
