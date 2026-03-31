@@ -479,8 +479,23 @@ RSpec.describe FB::Auth do
       Thread.current[:fb_dry_run] = false
     end
 
-    When(:result) { FB::Auth.valid_access_token }
-    Then { result == "dry-run-token" }
+    context "with no saved tokens" do
+      When(:result) { FB::Auth.valid_access_token }
+      Then { result == "dry-run-token" }
+    end
+
+    context "with a valid saved token" do
+      Given {
+        FB::Auth.save_tokens({
+          "access_token" => "real-token-123",
+          "refresh_token" => "refresh-abc",
+          "expires_in" => 3600,
+          "created_at" => Time.now.to_i
+        })
+      }
+      When(:result) { FB::Auth.valid_access_token }
+      Then { result == "real-token-123" }
+    end
   end
 
   describe ".require_config in dry-run with existing config" do

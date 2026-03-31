@@ -314,11 +314,18 @@ RSpec.describe FB::Api do
       Then { result == [{ "id" => 5, "name" => "Dev" }] }
     end
 
-    describe ".fetch_time_entry returns mock entry in dry-run" do
+    describe ".fetch_time_entry makes real GET in dry-run" do
+      Given {
+        stub_request(:get, %r{api\.freshbooks\.com/timetracking/business/12345/time_entries/42})
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "time_entry" => { "id" => 42, "duration" => 7200, "is_logged" => true } } }.to_json
+          )
+      }
       When(:result) { FB::Api.fetch_time_entry(42) }
       Then { result["id"] == 42 }
-      And  { result["duration"] == 3600 }
-      And  { result["is_logged"] == true }
+      And  { result["duration"] == 7200 }
     end
   end
 

@@ -165,16 +165,6 @@ module FB
       end
 
       def fetch_time_entry(entry_id)
-        if Thread.current[:fb_dry_run]
-          return {
-            "id" => entry_id,
-            "duration" => 3600,
-            "note" => "(dry run - entry #{entry_id})",
-            "started_at" => "#{Date.today}T00:00:00Z",
-            "is_logged" => true
-          }
-        end
-
         url = "#{BASE}/timetracking/business/#{business_id}/time_entries/#{entry_id}"
         response = HTTParty.get(url, { headers: headers })
 

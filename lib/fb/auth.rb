@@ -276,7 +276,11 @@ module FB
       end
 
       def valid_access_token
-        return "dry-run-token" if Thread.current[:fb_dry_run]
+        if Thread.current[:fb_dry_run]
+          tokens = load_tokens
+          return tokens["access_token"] if tokens && !token_expired?(tokens)
+          return "dry-run-token"
+        end
 
         config = require_config
         tokens = load_tokens

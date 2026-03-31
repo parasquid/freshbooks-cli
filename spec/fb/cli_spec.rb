@@ -990,13 +990,45 @@ RSpec.describe FB::Cli do
     end
 
     describe "edit --dry-run" do
-      context "table output" do
+      let(:fresh_cache) {
+        {
+          "updated_at" => Time.now.to_i,
+          "clients_data" => [{ "id" => 10, "organization" => "Acme Corp", "fname" => "", "lname" => "" }],
+          "projects_data" => [{ "id" => 20, "title" => "Website" }],
+          "services_data" => [],
+          "clients" => { "10" => "Acme Corp" },
+          "projects" => { "20" => "Website" },
+          "services" => {}
+        }
+      }
+      let(:entry_url) { %r{api\.freshbooks\.com/timetracking/business/12345/time_entries/999} }
+
+      before do
+        FB::Auth.save_cache(fresh_cache)
+        stub_request(:get, entry_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "time_entry" => {
+                  "id" => 999, "duration" => 3600, "note" => "Old note",
+                  "started_at" => "2024-03-01T10:00:00Z",
+                  "client_id" => 10, "project_id" => 20, "is_logged" => true
+                }
+              }
+            }.to_json
+          )
+      end
+
+      context "table output shows real entry fields" do
         When(:stdout) {
           capture_stdout {
             FB::Cli.start(["edit", "--id", "999", "--duration", "2.0", "--yes", "--dry-run"])
           }
         }
-        Then { stdout.include?("Time entry 999 updated.") }
+        Then { stdout.include?("Acme Corp") }
+        And  { stdout.include?("2.0h") }
       end
 
       context "json output includes _dry_run metadata" do
