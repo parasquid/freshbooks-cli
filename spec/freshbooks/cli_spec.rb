@@ -3,7 +3,7 @@
 require "json"
 require "date"
 
-RSpec.describe FB::Cli do
+RSpec.describe FreshBooks::CLI::Commands do
   let(:access_token) { "test_token" }
   let(:config) {
     { "client_id" => "cid", "client_secret" => "csec",
@@ -11,22 +11,22 @@ RSpec.describe FB::Cli do
   }
 
   before do
-    allow(FB::Auth).to receive(:valid_access_token).and_return(access_token)
-    allow(FB::Auth).to receive(:require_config).and_return(config)
+    allow(FreshBooks::CLI::Auth).to receive(:valid_access_token).and_return(access_token)
+    allow(FreshBooks::CLI::Auth).to receive(:require_config).and_return(config)
   end
 
   # --- version ---
 
   describe "version" do
-    When(:output) { capture_stdout { FB::Cli.start(["version"]) } }
-    Then { output.strip == "freshbooks-cli #{FB::VERSION}" }
+    When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["version"]) } }
+    Then { output.strip == "freshbooks-cli #{FreshBooks::CLI::VERSION}" }
   end
 
   # --- help --format json ---
 
   describe "help --format json" do
     When(:output) {
-      capture_stdout { FB::Cli.start(["help", "--format", "json"]) }
+      capture_stdout { FreshBooks::CLI::Commands.start(["help", "--format", "json"]) }
     }
     Then {
       json = JSON.parse(output)
@@ -43,19 +43,19 @@ RSpec.describe FB::Cli do
   describe "interactive?" do
     it "returns false when $stdin.tty? is false" do
       allow($stdin).to receive(:tty?).and_return(false)
-      cli = FB::Cli.new
+      cli = FreshBooks::CLI::Commands.new
       expect(cli.send(:interactive?)).to eq(false)
     end
 
     it "returns true when $stdin.tty? is true and --no-interactive is not set" do
       allow($stdin).to receive(:tty?).and_return(true)
-      cli = FB::Cli.new([], { no_interactive: false })
+      cli = FreshBooks::CLI::Commands.new([], { no_interactive: false })
       expect(cli.send(:interactive?)).to eq(true)
     end
 
     it "returns false when --no-interactive is set even if TTY" do
       allow($stdin).to receive(:tty?).and_return(true)
-      cli = FB::Cli.new([], { no_interactive: true })
+      cli = FreshBooks::CLI::Commands.new([], { no_interactive: true })
       expect(cli.send(:interactive?)).to eq(false)
     end
   end
@@ -96,7 +96,7 @@ RSpec.describe FB::Cli do
           )
       }
       When {
-        capture_stdout { FB::Cli.start(["entries", "--from", "2024-01-15", "--to", "2024-02-15"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["entries", "--from", "2024-01-15", "--to", "2024-02-15"]) }
       }
       Then {
         assert_requested(:get, time_entries_url,
@@ -126,7 +126,7 @@ RSpec.describe FB::Cli do
           )
       }
       When {
-        capture_stdout { FB::Cli.start(["entries"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["entries"]) }
       }
       Then {
         today = Date.today
@@ -164,7 +164,7 @@ RSpec.describe FB::Cli do
             }.to_json
           )
       }
-      When(:output) { capture_stdout { FB::Cli.start(["clients"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["clients"]) } }
       Then { output.include?("Acme Corp") }
       And  { output.include?("Jane Doe") }
       And  { output.include?("j@acme.com") }
@@ -184,7 +184,7 @@ RSpec.describe FB::Cli do
             }.to_json
           )
       }
-      When(:output) { capture_stdout { FB::Cli.start(["clients", "--format", "json"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["clients", "--format", "json"]) } }
       Then { JSON.parse(output).first["organization"] == "Acme Corp" }
     end
 
@@ -197,7 +197,7 @@ RSpec.describe FB::Cli do
             body: { "result" => { "clients" => [], "meta" => { "pages" => 1 } } }.to_json
           )
       }
-      When(:output) { capture_stdout { FB::Cli.start(["clients"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["clients"]) } }
       Then { output.include?("No clients found.") }
     end
   end
@@ -243,7 +243,7 @@ RSpec.describe FB::Cli do
             }.to_json
           )
       }
-      When(:output) { capture_stdout { FB::Cli.start(["projects"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["projects"]) } }
       Then { output.include?("Website Redesign") }
       And  { output.include?("Acme Corp") }
       And  { output.include?("active") }
@@ -266,7 +266,7 @@ RSpec.describe FB::Cli do
             }.to_json
           )
       }
-      When(:output) { capture_stdout { FB::Cli.start(["projects", "--client", "Acme Corp"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["projects", "--client", "Acme Corp"]) } }
       Then { output.include?("Website Redesign") }
       And  { !output.include?("Other Project") }
     end
@@ -293,7 +293,7 @@ RSpec.describe FB::Cli do
             }.to_json
           )
       }
-      When(:output) { capture_stdout { FB::Cli.start(["services"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["services"]) } }
       Then { output.include?("Development") }
       And  { output.include?("yes") }
       And  { output.include?("Design") }
@@ -313,7 +313,7 @@ RSpec.describe FB::Cli do
             }.to_json
           )
       }
-      When(:output) { capture_stdout { FB::Cli.start(["services", "--format", "json"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["services", "--format", "json"]) } }
       Then { JSON.parse(output).first["name"] == "Development" }
     end
   end
@@ -373,7 +373,7 @@ RSpec.describe FB::Cli do
 
     context "with entries" do
       Given { stub_all }
-      When(:output) { capture_stdout { FB::Cli.start(["status"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["status"]) } }
       Then { output.include?("Today") }
       And  { output.include?("This Week") }
       And  { output.include?("This Month") }
@@ -383,7 +383,7 @@ RSpec.describe FB::Cli do
 
     context "with --format json" do
       Given { stub_all }
-      When(:output) { capture_stdout { FB::Cli.start(["status", "--format", "json"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["status", "--format", "json"]) } }
       Then {
         json = JSON.parse(output)
         json.key?("today") && json.key?("this_week") && json.key?("this_month") &&
@@ -404,7 +404,7 @@ RSpec.describe FB::Cli do
           .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: "")
       }
       When(:output) {
-        capture_stdout { FB::Cli.start(["delete", "--id", "999", "--yes"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["delete", "--id", "999", "--yes"]) }
       }
       Then { output.include?("Time entry 999 deleted.") }
     end
@@ -414,7 +414,7 @@ RSpec.describe FB::Cli do
         allow($stdin).to receive(:gets).and_return("n\n")
       }
       When(:result) {
-        capture_stdout { FB::Cli.start(["delete", "--id", "999"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["delete", "--id", "999"]) }
       }
       Then { result == Failure(SystemExit) }
     end
@@ -425,7 +425,7 @@ RSpec.describe FB::Cli do
           .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: "")
       }
       When(:output) {
-        capture_stdout { FB::Cli.start(["delete", "--id", "999", "--yes", "--format", "json"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["delete", "--id", "999", "--yes", "--format", "json"]) }
       }
       Then {
         json = JSON.parse(output)
@@ -438,7 +438,7 @@ RSpec.describe FB::Cli do
         allow($stdin).to receive(:tty?).and_return(false)
       }
       When(:result) {
-        capture_stdout { FB::Cli.start(["delete"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["delete"]) }
       }
       Then { result == Failure(SystemExit) }
     end
@@ -503,7 +503,7 @@ RSpec.describe FB::Cli do
     context "scripted with --id, --duration, --yes" do
       Given { stub_edit_apis }
       When(:output) {
-        capture_stdout { FB::Cli.start(["edit", "--id", "999", "--duration", "1.5", "--yes"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["edit", "--id", "999", "--duration", "1.5", "--yes"]) }
       }
       Then { output.include?("Time entry 999 updated.") }
       And  { output.include?("Edit Summary") }
@@ -512,7 +512,7 @@ RSpec.describe FB::Cli do
     context "with --format json" do
       Given { stub_edit_apis }
       When(:output) {
-        capture_stdout { FB::Cli.start(["edit", "--id", "999", "--duration", "1.5", "--yes", "--format", "json"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["edit", "--id", "999", "--duration", "1.5", "--yes", "--format", "json"]) }
       }
       Then {
         json = JSON.parse(output)
@@ -525,7 +525,7 @@ RSpec.describe FB::Cli do
         allow($stdin).to receive(:tty?).and_return(false)
       }
       When(:result) {
-        capture_stdout { FB::Cli.start(["edit"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["edit"]) }
       }
       Then { result == Failure(SystemExit) }
     end
@@ -584,7 +584,7 @@ RSpec.describe FB::Cli do
       Given { stub_log_apis }
       When(:output) {
         capture_stdout {
-          FB::Cli.start(["log", "--client", "Acme Corp", "--duration", "2.5", "--note", "test work", "--yes"])
+          FreshBooks::CLI::Commands.start(["log", "--client", "Acme Corp", "--duration", "2.5", "--note", "test work", "--yes"])
         }
       }
       Then { output.include?("Time entry created!") }
@@ -594,7 +594,7 @@ RSpec.describe FB::Cli do
       Given { stub_log_apis }
       When(:output) {
         capture_stdout {
-          FB::Cli.start(["log", "--client", "Acme Corp", "--duration", "2.5", "--note", "test work", "--yes", "--format", "json"])
+          FreshBooks::CLI::Commands.start(["log", "--client", "Acme Corp", "--duration", "2.5", "--note", "test work", "--yes", "--format", "json"])
         }
       }
       Then {
@@ -610,7 +610,7 @@ RSpec.describe FB::Cli do
       }
       When(:result) {
         capture_stdout {
-          FB::Cli.start(["log", "--client", "Acme Corp", "--note", "test work", "--yes"])
+          FreshBooks::CLI::Commands.start(["log", "--client", "Acme Corp", "--note", "test work", "--yes"])
         }
       }
       Then { result == Failure(SystemExit) }
@@ -623,7 +623,7 @@ RSpec.describe FB::Cli do
       }
       When(:result) {
         capture_stdout {
-          FB::Cli.start(["log", "--client", "Acme Corp", "--duration", "2.5", "--yes"])
+          FreshBooks::CLI::Commands.start(["log", "--client", "Acme Corp", "--duration", "2.5", "--yes"])
         }
       }
       Then { result == Failure(SystemExit) }
@@ -636,7 +636,7 @@ RSpec.describe FB::Cli do
       }
       When(:output) {
         capture_stdout {
-          FB::Cli.start(["log", "--duration", "2.5", "--note", "test work", "--yes"])
+          FreshBooks::CLI::Commands.start(["log", "--duration", "2.5", "--note", "test work", "--yes"])
         }
       }
       Then { output.include?("Time entry created!") }
@@ -662,7 +662,7 @@ RSpec.describe FB::Cli do
       }
       When(:result) {
         capture_stdout {
-          FB::Cli.start(["log", "--duration", "2.5", "--note", "test", "--yes"])
+          FreshBooks::CLI::Commands.start(["log", "--duration", "2.5", "--note", "test", "--yes"])
         }
       }
       Then { result == Failure(SystemExit) }
@@ -673,20 +673,20 @@ RSpec.describe FB::Cli do
 
   describe "cache" do
     context "status with no cache" do
-      When(:output) { capture_stdout { FB::Cli.start(["cache", "status"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["cache", "status"]) } }
       Then { output.include?("No cache data.") }
     end
 
     context "status with existing cache" do
       Given {
-        FB::Auth.save_cache(
+        FreshBooks::CLI::Auth.save_cache(
           "updated_at" => Time.now.to_i - 30,
           "clients_data" => [{ "id" => 1 }],
           "projects_data" => [{ "id" => 2 }, { "id" => 3 }],
           "services_data" => []
         )
       }
-      When(:output) { capture_stdout { FB::Cli.start(["cache", "status"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["cache", "status"]) } }
       Then { output.include?("fresh") }
       And  { output.include?("Clients: 1") }
       And  { output.include?("Projects: 2") }
@@ -694,14 +694,14 @@ RSpec.describe FB::Cli do
 
     context "status with --format json" do
       Given {
-        FB::Auth.save_cache(
+        FreshBooks::CLI::Auth.save_cache(
           "updated_at" => Time.now.to_i - 30,
           "clients_data" => [{ "id" => 1 }],
           "projects_data" => [{ "id" => 2 }, { "id" => 3 }],
           "services_data" => []
         )
       }
-      When(:output) { capture_stdout { FB::Cli.start(["cache", "status", "--format", "json"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["cache", "status", "--format", "json"]) } }
       Then {
         json = JSON.parse(output)
         json["fresh"] == true && json["clients"] == 1 && json["projects"] == 2
@@ -709,7 +709,7 @@ RSpec.describe FB::Cli do
     end
 
     context "status with --format json and no cache" do
-      When(:output) { capture_stdout { FB::Cli.start(["cache", "status", "--format", "json"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["cache", "status", "--format", "json"]) } }
       Then {
         json = JSON.parse(output)
         json["fresh"] == false && json["clients"] == 0
@@ -718,15 +718,15 @@ RSpec.describe FB::Cli do
 
     context "clear with existing cache" do
       Given {
-        FB::Auth.save_cache("updated_at" => Time.now.to_i)
+        FreshBooks::CLI::Auth.save_cache("updated_at" => Time.now.to_i)
       }
-      When(:output) { capture_stdout { FB::Cli.start(["cache", "clear"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["cache", "clear"]) } }
       Then { output.include?("Cache cleared.") }
-      And  { !File.exist?(FB::Auth.cache_path) }
+      And  { !File.exist?(FreshBooks::CLI::Auth.cache_path) }
     end
 
     context "clear with no cache" do
-      When(:output) { capture_stdout { FB::Cli.start(["cache", "clear"]) } }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["cache", "clear"]) } }
       Then { output.include?("No cache file found.") }
     end
   end
@@ -744,11 +744,11 @@ RSpec.describe FB::Cli do
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
       When(:output) {
-        capture_stdout { FB::Cli.start(["auth", "setup"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["auth", "setup"]) }
       }
       Then { output.include?("Config saved") }
       And  {
-        config = FB::Auth.load_config
+        config = FreshBooks::CLI::Auth.load_config
         config["client_id"] == "test_id" && config["client_secret"] == "test_sec"
       }
     end
@@ -763,7 +763,7 @@ RSpec.describe FB::Cli do
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
       When(:output) {
-        capture_stdout { FB::Cli.start(["auth", "setup", "--format", "json"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["auth", "setup", "--format", "json"]) }
       }
       Then {
         json = JSON.parse(output)
@@ -777,17 +777,17 @@ RSpec.describe FB::Cli do
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
       When(:result) {
-        capture_stdout { FB::Cli.start(["auth", "setup"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["auth", "setup"]) }
       }
       Then { result == Failure(SystemExit) }
     end
 
     context "url with config" do
       Given {
-        FB::Auth.save_config("client_id" => "cid", "client_secret" => "csec")
+        FreshBooks::CLI::Auth.save_config("client_id" => "cid", "client_secret" => "csec")
       }
       When(:output) {
-        capture_stdout { FB::Cli.start(["auth", "url"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["auth", "url"]) }
       }
       Then { output.include?("auth.freshbooks.com/oauth/authorize") }
       And  { output.include?("client_id=cid") }
@@ -795,10 +795,10 @@ RSpec.describe FB::Cli do
 
     context "url with --format json" do
       Given {
-        FB::Auth.save_config("client_id" => "cid", "client_secret" => "csec")
+        FreshBooks::CLI::Auth.save_config("client_id" => "cid", "client_secret" => "csec")
       }
       When(:output) {
-        capture_stdout { FB::Cli.start(["auth", "url", "--format", "json"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["auth", "url", "--format", "json"]) }
       }
       Then {
         json = JSON.parse(output)
@@ -808,14 +808,14 @@ RSpec.describe FB::Cli do
 
     context "url without config aborts" do
       When(:result) {
-        capture_stdout { FB::Cli.start(["auth", "url"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["auth", "url"]) }
       }
       Then { result == Failure(SystemExit) }
     end
 
     context "status" do
       When(:output) {
-        capture_stdout { FB::Cli.start(["auth", "status"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["auth", "status"]) }
       }
       Then { output.include?("Config:") }
       And  { output.include?("Tokens:") }
@@ -823,7 +823,7 @@ RSpec.describe FB::Cli do
 
     context "status with --format json" do
       When(:output) {
-        capture_stdout { FB::Cli.start(["auth", "status", "--format", "json"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["auth", "status", "--format", "json"]) }
       }
       Then {
         json = JSON.parse(output)
@@ -836,7 +836,7 @@ RSpec.describe FB::Cli do
         allow($stdin).to receive(:tty?).and_return(false)
       }
       When(:result) {
-        capture_stdout { FB::Cli.start(["auth"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["auth"]) }
       }
       Then { result == Failure(SystemExit) }
     end
@@ -896,7 +896,7 @@ RSpec.describe FB::Cli do
           )
       }
       When(:output) {
-        capture_stdout { FB::Cli.start(["entries", "--from", "2024-03-01", "--to", "2024-03-31"]) }
+        capture_stdout { FreshBooks::CLI::Commands.start(["entries", "--from", "2024-03-01", "--to", "2024-03-31"]) }
       }
       Then { output.include?("ID") }
       And  { output.include?("42") }
@@ -907,7 +907,7 @@ RSpec.describe FB::Cli do
 
   describe "help --format json includes new commands" do
     When(:output) {
-      capture_stdout { FB::Cli.start(["help", "--format", "json"]) }
+      capture_stdout { FreshBooks::CLI::Commands.start(["help", "--format", "json"]) }
     }
     Then {
       json = JSON.parse(output)
@@ -923,7 +923,7 @@ RSpec.describe FB::Cli do
 
   describe "help --format json includes --dry-run in global_flags" do
     When(:output) {
-      capture_stdout { FB::Cli.start(["help", "--format", "json"]) }
+      capture_stdout { FreshBooks::CLI::Commands.start(["help", "--format", "json"]) }
     }
     Then { JSON.parse(output)["global_flags"].key?("--dry-run") }
   end
@@ -932,7 +932,7 @@ RSpec.describe FB::Cli do
 
   describe "--dry-run banner" do
     When(:stderr_output) {
-      capture_stderr { capture_stdout { FB::Cli.start(["version", "--dry-run"]) } }
+      capture_stderr { capture_stdout { FreshBooks::CLI::Commands.start(["version", "--dry-run"]) } }
     }
     Then { stderr_output.include?("[DRY RUN]") }
   end
@@ -952,13 +952,13 @@ RSpec.describe FB::Cli do
       }
     }
 
-    before { FB::Auth.save_cache(stale_cache) }
+    before { FreshBooks::CLI::Auth.save_cache(stale_cache) }
 
     describe "log --dry-run" do
       context "table output" do
         When(:stdout) {
           capture_stdout {
-            FB::Cli.start(["log", "--client", "Acme Corp", "--duration", "1.5",
+            FreshBooks::CLI::Commands.start(["log", "--client", "Acme Corp", "--duration", "1.5",
                            "--note", "test work", "--yes", "--dry-run"])
           }
         }
@@ -968,7 +968,7 @@ RSpec.describe FB::Cli do
       context "json output includes _dry_run metadata" do
         When(:stdout) {
           capture_stdout {
-            FB::Cli.start(["log", "--client", "Acme Corp", "--duration", "1.5",
+            FreshBooks::CLI::Commands.start(["log", "--client", "Acme Corp", "--duration", "1.5",
                            "--note", "test work", "--yes", "--dry-run", "--format", "json"])
           }
         }
@@ -981,7 +981,7 @@ RSpec.describe FB::Cli do
       context "json output includes _dry_run.payload_sent" do
         When(:stdout) {
           capture_stdout {
-            FB::Cli.start(["log", "--client", "Acme Corp", "--duration", "1.5",
+            FreshBooks::CLI::Commands.start(["log", "--client", "Acme Corp", "--duration", "1.5",
                            "--note", "test work", "--yes", "--dry-run", "--format", "json"])
           }
         }
@@ -1004,7 +1004,7 @@ RSpec.describe FB::Cli do
       let(:entry_url) { %r{api\.freshbooks\.com/timetracking/business/12345/time_entries/999} }
 
       before do
-        FB::Auth.save_cache(fresh_cache)
+        FreshBooks::CLI::Auth.save_cache(fresh_cache)
         stub_request(:get, entry_url)
           .to_return(
             status: 200,
@@ -1024,7 +1024,7 @@ RSpec.describe FB::Cli do
       context "table output shows real entry fields" do
         When(:stdout) {
           capture_stdout {
-            FB::Cli.start(["edit", "--id", "999", "--duration", "2.0", "--yes", "--dry-run"])
+            FreshBooks::CLI::Commands.start(["edit", "--id", "999", "--duration", "2.0", "--yes", "--dry-run"])
           }
         }
         Then { stdout.include?("Acme Corp") }
@@ -1034,7 +1034,7 @@ RSpec.describe FB::Cli do
       context "json output includes _dry_run metadata" do
         When(:stdout) {
           capture_stdout {
-            FB::Cli.start(["edit", "--id", "999", "--duration", "2.0",
+            FreshBooks::CLI::Commands.start(["edit", "--id", "999", "--duration", "2.0",
                            "--yes", "--dry-run", "--format", "json"])
           }
         }
@@ -1049,7 +1049,7 @@ RSpec.describe FB::Cli do
       context "table output" do
         When(:stdout) {
           capture_stdout {
-            FB::Cli.start(["delete", "--id", "999", "--yes", "--dry-run"])
+            FreshBooks::CLI::Commands.start(["delete", "--id", "999", "--yes", "--dry-run"])
           }
         }
         Then { stdout.include?("Time entry 999 deleted.") }
@@ -1058,7 +1058,7 @@ RSpec.describe FB::Cli do
       context "json output includes _dry_run metadata" do
         When(:stdout) {
           capture_stdout {
-            FB::Cli.start(["delete", "--id", "999", "--yes", "--dry-run", "--format", "json"])
+            FreshBooks::CLI::Commands.start(["delete", "--id", "999", "--yes", "--dry-run", "--format", "json"])
           }
         }
         Then {
@@ -1071,14 +1071,14 @@ RSpec.describe FB::Cli do
     describe "clients --dry-run" do
       context "table output uses stale cache" do
         When(:stdout) {
-          capture_stdout { FB::Cli.start(["clients", "--dry-run"]) }
+          capture_stdout { FreshBooks::CLI::Commands.start(["clients", "--dry-run"]) }
         }
         Then { stdout.include?("Acme Corp") }
       end
 
       context "json output includes _dry_run metadata" do
         When(:stdout) {
-          capture_stdout { FB::Cli.start(["clients", "--dry-run", "--format", "json"]) }
+          capture_stdout { FreshBooks::CLI::Commands.start(["clients", "--dry-run", "--format", "json"]) }
         }
         Then {
           json = JSON.parse(stdout)
@@ -1089,7 +1089,7 @@ RSpec.describe FB::Cli do
 
     describe "stderr banner" do
       When(:stderr) {
-        capture_stderr { capture_stdout { FB::Cli.start(["version", "--dry-run"]) } }
+        capture_stderr { capture_stdout { FreshBooks::CLI::Commands.start(["version", "--dry-run"]) } }
       }
       Then { stderr.include?("[DRY RUN] No changes will be made.") }
     end
@@ -1099,19 +1099,19 @@ RSpec.describe FB::Cli do
 
   describe "#display_name (via entries table output)" do
     it "returns organization when present" do
-      cli = FB::Cli.new
+      cli = FreshBooks::CLI::Commands.new
       result = cli.send(:display_name, { "organization" => "Acme", "fname" => "J", "lname" => "D" })
       expect(result).to eq("Acme")
     end
 
     it "returns fname lname when organization is empty" do
-      cli = FB::Cli.new
+      cli = FreshBooks::CLI::Commands.new
       result = cli.send(:display_name, { "organization" => "", "fname" => "Jane", "lname" => "Doe" })
       expect(result).to eq("Jane Doe")
     end
 
     it "returns fname lname when organization is nil" do
-      cli = FB::Cli.new
+      cli = FreshBooks::CLI::Commands.new
       result = cli.send(:display_name, { "organization" => nil, "fname" => "Jane", "lname" => "Doe" })
       expect(result).to eq("Jane Doe")
     end

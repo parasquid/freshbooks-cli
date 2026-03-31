@@ -2,7 +2,7 @@
 
 require "json"
 
-RSpec.describe FB::Auth do
+RSpec.describe FreshBooks::CLI::Auth do
   # --- Config Loading ---
 
   describe ".load_config" do
@@ -10,14 +10,14 @@ RSpec.describe FB::Auth do
       Given {
         ENV["FRESHBOOKS_CLIENT_ID"] = "abc"
         ENV["FRESHBOOKS_CLIENT_SECRET"] = "xyz"
-        FileUtils.mkdir_p(FB::Auth.data_dir)
-        File.write(FB::Auth.config_path, JSON.generate("business_id" => 99, "account_id" => "acc9"))
+        FileUtils.mkdir_p(FreshBooks::CLI::Auth.data_dir)
+        File.write(FreshBooks::CLI::Auth.config_path, JSON.generate("business_id" => 99, "account_id" => "acc9"))
       }
       after {
         ENV.delete("FRESHBOOKS_CLIENT_ID")
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
-      When(:result) { FB::Auth.load_config }
+      When(:result) { FreshBooks::CLI::Auth.load_config }
       Then { result["client_id"] == "abc" }
       And  { result["client_secret"] == "xyz" }
       And  { result["business_id"] == 99 }
@@ -26,14 +26,14 @@ RSpec.describe FB::Auth do
 
     context "with credentials in .env file" do
       Given {
-        FileUtils.mkdir_p(FB::Auth.data_dir)
-        File.write(File.join(FB::Auth.data_dir, ".env"), "FRESHBOOKS_CLIENT_ID=dotenv_id\nFRESHBOOKS_CLIENT_SECRET=dotenv_sec\n")
+        FileUtils.mkdir_p(FreshBooks::CLI::Auth.data_dir)
+        File.write(File.join(FreshBooks::CLI::Auth.data_dir, ".env"), "FRESHBOOKS_CLIENT_ID=dotenv_id\nFRESHBOOKS_CLIENT_SECRET=dotenv_sec\n")
       }
       after {
         ENV.delete("FRESHBOOKS_CLIENT_ID")
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
-      When(:result) { FB::Auth.load_config }
+      When(:result) { FreshBooks::CLI::Auth.load_config }
       Then { result["client_id"] == "dotenv_id" }
       And  { result["client_secret"] == "dotenv_sec" }
     end
@@ -43,7 +43,7 @@ RSpec.describe FB::Auth do
         ENV.delete("FRESHBOOKS_CLIENT_ID")
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
-      When(:result) { FB::Auth.load_config }
+      When(:result) { FreshBooks::CLI::Auth.load_config }
       Then { result.nil? }
     end
   end
@@ -51,10 +51,10 @@ RSpec.describe FB::Auth do
   # --- Config Saving ---
 
   describe ".save_config" do
-    When { FB::Auth.save_config("client_id" => "id1", "client_secret" => "sec1", "business_id" => 5) }
-    Then { File.exist?(FB::Auth.config_path) }
+    When { FreshBooks::CLI::Auth.save_config("client_id" => "id1", "client_secret" => "sec1", "business_id" => 5) }
+    Then { File.exist?(FreshBooks::CLI::Auth.config_path) }
     And {
-      parsed = JSON.parse(File.read(FB::Auth.config_path))
+      parsed = JSON.parse(File.read(FreshBooks::CLI::Auth.config_path))
       parsed == { "business_id" => 5 }
     }
   end
@@ -64,16 +64,16 @@ RSpec.describe FB::Auth do
   describe ".token_expired?" do
     context "with future expiry" do
       Given(:tokens) { { "created_at" => Time.now.to_i, "expires_in" => 3600 } }
-      Then { FB::Auth.token_expired?(tokens) == false }
+      Then { FreshBooks::CLI::Auth.token_expired?(tokens) == false }
     end
 
     context "with past expiry" do
       Given(:tokens) { { "created_at" => Time.now.to_i - 7200, "expires_in" => 3600 } }
-      Then { FB::Auth.token_expired?(tokens) == true }
+      Then { FreshBooks::CLI::Auth.token_expired?(tokens) == true }
     end
 
     context "with nil tokens" do
-      Then { FB::Auth.token_expired?(nil) == true }
+      Then { FreshBooks::CLI::Auth.token_expired?(nil) == true }
     end
   end
 
@@ -85,7 +85,7 @@ RSpec.describe FB::Auth do
 
     context "when API returns new tokens" do
       Given {
-        stub_request(:post, FB::Auth::TOKEN_URL)
+        stub_request(:post, FreshBooks::CLI::Auth::TOKEN_URL)
           .to_return(
             status: 200,
             headers: { "Content-Type" => "application/json" },
@@ -96,24 +96,24 @@ RSpec.describe FB::Auth do
             }.to_json
           )
       }
-      When(:result) { FB::Auth.refresh_token!(config, tokens) }
+      When(:result) { FreshBooks::CLI::Auth.refresh_token!(config, tokens) }
       Then { result["access_token"] == "new_access" }
       And  { result["refresh_token"] == "new_refresh" }
       And  { result["expires_in"] == 3600 }
       And  { result["created_at"].is_a?(Integer) }
-      And  { File.exist?(FB::Auth.tokens_path) }
+      And  { File.exist?(FreshBooks::CLI::Auth.tokens_path) }
     end
 
     context "when API returns 401" do
       Given {
-        stub_request(:post, FB::Auth::TOKEN_URL)
+        stub_request(:post, FreshBooks::CLI::Auth::TOKEN_URL)
           .to_return(
             status: 401,
             headers: { "Content-Type" => "application/json" },
             body: { "error" => "invalid_grant" }.to_json
           )
       }
-      When(:result) { FB::Auth.refresh_token!(config, tokens) }
+      When(:result) { FreshBooks::CLI::Auth.refresh_token!(config, tokens) }
       Then { result == Failure(SystemExit) }
     end
   end
@@ -122,19 +122,19 @@ RSpec.describe FB::Auth do
 
   describe ".check_scopes" do
     context "with all required scopes" do
-      Given(:scope_string) { FB::Auth::REQUIRED_SCOPES.join(" ") }
-      When(:result) { FB::Auth.check_scopes(scope_string) }
+      Given(:scope_string) { FreshBooks::CLI::Auth::REQUIRED_SCOPES.join(" ") }
+      When(:result) { FreshBooks::CLI::Auth.check_scopes(scope_string) }
       Then { !result.is_a?(SystemExit) }
     end
 
     context "with nil scopes (API didn't return them)" do
-      When(:result) { FB::Auth.check_scopes(nil) }
+      When(:result) { FreshBooks::CLI::Auth.check_scopes(nil) }
       Then { result.nil? }
     end
 
     context "with missing scopes" do
       Given(:scope_string) { "user:profile:read" }
-      When(:result) { FB::Auth.check_scopes(scope_string) }
+      When(:result) { FreshBooks::CLI::Auth.check_scopes(scope_string) }
       Then { result == Failure(SystemExit) }
     end
   end
@@ -142,42 +142,42 @@ RSpec.describe FB::Auth do
   # --- Migrate Credentials from Config ---
 
   describe ".migrate_credentials_from_config" do
-    let(:env_path) { File.join(FB::Auth.data_dir, ".env") }
+    let(:env_path) { File.join(FreshBooks::CLI::Auth.data_dir, ".env") }
 
     context "when config.json has client_id and client_secret" do
       Given {
-        FileUtils.mkdir_p(FB::Auth.data_dir)
-        File.write(FB::Auth.config_path, JSON.generate("client_id" => "old_id", "client_secret" => "old_sec", "business_id" => 42))
+        FileUtils.mkdir_p(FreshBooks::CLI::Auth.data_dir)
+        File.write(FreshBooks::CLI::Auth.config_path, JSON.generate("client_id" => "old_id", "client_secret" => "old_sec", "business_id" => 42))
       }
-      When { FB::Auth.migrate_credentials_from_config }
+      When { FreshBooks::CLI::Auth.migrate_credentials_from_config }
       Then { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=old_id") }
       And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=old_sec") }
-      And  { !JSON.parse(File.read(FB::Auth.config_path)).key?("client_id") }
-      And  { !JSON.parse(File.read(FB::Auth.config_path)).key?("client_secret") }
-      And  { JSON.parse(File.read(FB::Auth.config_path))["business_id"] == 42 }
+      And  { !JSON.parse(File.read(FreshBooks::CLI::Auth.config_path)).key?("client_id") }
+      And  { !JSON.parse(File.read(FreshBooks::CLI::Auth.config_path)).key?("client_secret") }
+      And  { JSON.parse(File.read(FreshBooks::CLI::Auth.config_path))["business_id"] == 42 }
     end
 
     context "when .env already has the keys" do
       Given {
-        FileUtils.mkdir_p(FB::Auth.data_dir)
+        FileUtils.mkdir_p(FreshBooks::CLI::Auth.data_dir)
         File.write(env_path, "FRESHBOOKS_CLIENT_ID=existing\nFRESHBOOKS_CLIENT_SECRET=existing_sec\n")
-        File.write(FB::Auth.config_path, JSON.generate("client_id" => "old_id", "client_secret" => "old_sec"))
+        File.write(FreshBooks::CLI::Auth.config_path, JSON.generate("client_id" => "old_id", "client_secret" => "old_sec"))
       }
-      When { FB::Auth.migrate_credentials_from_config }
+      When { FreshBooks::CLI::Auth.migrate_credentials_from_config }
       Then { File.read(env_path) == "FRESHBOOKS_CLIENT_ID=existing\nFRESHBOOKS_CLIENT_SECRET=existing_sec\n" }
     end
 
     context "when config.json has no credentials" do
       Given {
-        FileUtils.mkdir_p(FB::Auth.data_dir)
-        File.write(FB::Auth.config_path, JSON.generate("business_id" => 7))
+        FileUtils.mkdir_p(FreshBooks::CLI::Auth.data_dir)
+        File.write(FreshBooks::CLI::Auth.config_path, JSON.generate("business_id" => 7))
       }
-      When { FB::Auth.migrate_credentials_from_config }
+      When { FreshBooks::CLI::Auth.migrate_credentials_from_config }
       Then { !File.exist?(env_path) }
     end
 
     context "when config.json does not exist" do
-      When(:result) { FB::Auth.migrate_credentials_from_config }
+      When(:result) { FreshBooks::CLI::Auth.migrate_credentials_from_config }
       Then { result.nil? }
     end
   end
@@ -185,10 +185,10 @@ RSpec.describe FB::Auth do
   # --- Write Credentials to .env ---
 
   describe ".write_credentials_to_env" do
-    let(:env_path) { File.join(FB::Auth.data_dir, ".env") }
+    let(:env_path) { File.join(FreshBooks::CLI::Auth.data_dir, ".env") }
 
     context "when .env does not exist" do
-      When { FB::Auth.write_credentials_to_env(env_path, "my_id", "my_secret") }
+      When { FreshBooks::CLI::Auth.write_credentials_to_env(env_path, "my_id", "my_secret") }
       Then { File.exist?(env_path) }
       And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=my_id") }
       And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=my_secret") }
@@ -196,10 +196,10 @@ RSpec.describe FB::Auth do
 
     context "when .env exists without the keys" do
       Given {
-        FileUtils.mkdir_p(FB::Auth.data_dir)
+        FileUtils.mkdir_p(FreshBooks::CLI::Auth.data_dir)
         File.write(env_path, "OTHER_VAR=other\n")
       }
-      When { FB::Auth.write_credentials_to_env(env_path, "appended_id", "appended_secret") }
+      When { FreshBooks::CLI::Auth.write_credentials_to_env(env_path, "appended_id", "appended_secret") }
       Then { File.read(env_path).include?("OTHER_VAR=other") }
       And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=appended_id") }
       And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=appended_secret") }
@@ -207,10 +207,10 @@ RSpec.describe FB::Auth do
 
     context "when .env exists with keys already present" do
       Given {
-        FileUtils.mkdir_p(FB::Auth.data_dir)
+        FileUtils.mkdir_p(FreshBooks::CLI::Auth.data_dir)
         File.write(env_path, "FRESHBOOKS_CLIENT_ID=existing_id\nFRESHBOOKS_CLIENT_SECRET=existing_secret\n")
       }
-      When { FB::Auth.write_credentials_to_env(env_path, "new_id", "new_secret") }
+      When { FreshBooks::CLI::Auth.write_credentials_to_env(env_path, "new_id", "new_secret") }
       Then { File.read(env_path) == "FRESHBOOKS_CLIENT_ID=existing_id\nFRESHBOOKS_CLIENT_SECRET=existing_secret\n" }
     end
   end
@@ -227,21 +227,21 @@ RSpec.describe FB::Auth do
         ENV.delete("FRESHBOOKS_CLIENT_ID")
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
-      When(:result) { FB::Auth.setup_config_from_args }
+      When(:result) { FreshBooks::CLI::Auth.setup_config_from_args }
       Then { result == { "client_id" => "env_id", "client_secret" => "env_secret" } }
-      And  { !File.exist?(FB::Auth.config_path) }
+      And  { !File.exist?(FreshBooks::CLI::Auth.config_path) }
     end
 
     context "with .env file in data_dir" do
       Given {
-        FileUtils.mkdir_p(FB::Auth.data_dir)
-        File.write(File.join(FB::Auth.data_dir, ".env"), "FRESHBOOKS_CLIENT_ID=dotenv_id\nFRESHBOOKS_CLIENT_SECRET=dotenv_secret\n")
+        FileUtils.mkdir_p(FreshBooks::CLI::Auth.data_dir)
+        File.write(File.join(FreshBooks::CLI::Auth.data_dir, ".env"), "FRESHBOOKS_CLIENT_ID=dotenv_id\nFRESHBOOKS_CLIENT_SECRET=dotenv_secret\n")
       }
       after {
         ENV.delete("FRESHBOOKS_CLIENT_ID")
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
-      When(:result) { FB::Auth.setup_config_from_args }
+      When(:result) { FreshBooks::CLI::Auth.setup_config_from_args }
       Then { result == { "client_id" => "dotenv_id", "client_secret" => "dotenv_secret" } }
     end
 
@@ -251,7 +251,7 @@ RSpec.describe FB::Auth do
         ENV["FRESHBOOKS_CLIENT_SECRET"] = "sec"
       }
       after { ENV.delete("FRESHBOOKS_CLIENT_SECRET") }
-      When(:result) { FB::Auth.setup_config_from_args }
+      When(:result) { FreshBooks::CLI::Auth.setup_config_from_args }
       Then { result == Failure(SystemExit) }
     end
 
@@ -261,7 +261,7 @@ RSpec.describe FB::Auth do
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
       after { ENV.delete("FRESHBOOKS_CLIENT_ID") }
-      When(:result) { FB::Auth.setup_config_from_args }
+      When(:result) { FreshBooks::CLI::Auth.setup_config_from_args }
       Then { result == Failure(SystemExit) }
     end
 
@@ -270,7 +270,7 @@ RSpec.describe FB::Auth do
         ENV.delete("FRESHBOOKS_CLIENT_ID")
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
-      When(:result) { FB::Auth.setup_config_from_args }
+      When(:result) { FreshBooks::CLI::Auth.setup_config_from_args }
       Then { result == Failure(SystemExit) }
     end
   end
@@ -278,7 +278,7 @@ RSpec.describe FB::Auth do
   # --- Interactive Setup with Masked Secret ---
 
   describe ".setup_config" do
-    let(:env_path) { File.join(FB::Auth.data_dir, ".env") }
+    let(:env_path) { File.join(FreshBooks::CLI::Auth.data_dir, ".env") }
 
     context "writes credentials to ~/.fb/.env" do
       Given {
@@ -291,7 +291,7 @@ RSpec.describe FB::Auth do
         ENV.delete("FRESHBOOKS_CLIENT_ID")
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
-      When { capture_stdout { FB::Auth.setup_config } }
+      When { capture_stdout { FreshBooks::CLI::Auth.setup_config } }
       Then { File.exist?(env_path) }
       And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=my_client_id") }
       And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=my_secret") }
@@ -299,14 +299,14 @@ RSpec.describe FB::Auth do
 
     context "prompts to overwrite when credentials already exist" do
       Given {
-        FileUtils.mkdir_p(FB::Auth.data_dir)
+        FileUtils.mkdir_p(FreshBooks::CLI::Auth.data_dir)
         File.write(env_path, "FRESHBOOKS_CLIENT_ID=old_id\nFRESHBOOKS_CLIENT_SECRET=old_sec\n")
         allow($stdin).to receive(:gets).and_return("new_id\n", "y\n")
         console_double = instance_double(IO)
         allow(IO).to receive(:console).and_return(console_double)
         allow(console_double).to receive(:getpass).with("").and_return("new_sec")
       }
-      When { capture_stdout { FB::Auth.setup_config } }
+      When { capture_stdout { FreshBooks::CLI::Auth.setup_config } }
       Then { File.read(env_path).include?("FRESHBOOKS_CLIENT_ID=new_id") }
       And  { File.read(env_path).include?("FRESHBOOKS_CLIENT_SECRET=new_sec") }
     end
@@ -316,7 +316,7 @@ RSpec.describe FB::Auth do
 
   describe ".authorize_url" do
     Given(:config) { { "client_id" => "test_cid", "client_secret" => "sec" } }
-    When(:result) { FB::Auth.authorize_url(config) }
+    When(:result) { FreshBooks::CLI::Auth.authorize_url(config) }
     Then { result.include?("auth.freshbooks.com/oauth/authorize") }
     And  { result.include?("client_id=test_cid") }
   end
@@ -325,12 +325,12 @@ RSpec.describe FB::Auth do
 
   describe ".extract_code_from_url" do
     context "with valid redirect URL" do
-      When(:result) { FB::Auth.extract_code_from_url("https://localhost?code=abc123") }
+      When(:result) { FreshBooks::CLI::Auth.extract_code_from_url("https://localhost?code=abc123") }
       Then { result == "abc123" }
     end
 
     context "with no code parameter" do
-      When(:result) { FB::Auth.extract_code_from_url("https://localhost?error=denied") }
+      When(:result) { FreshBooks::CLI::Auth.extract_code_from_url("https://localhost?error=denied") }
       Then { result.nil? }
     end
   end
@@ -339,7 +339,7 @@ RSpec.describe FB::Auth do
 
   describe ".auth_status" do
     context "with no config or tokens" do
-      When(:result) { FB::Auth.auth_status }
+      When(:result) { FreshBooks::CLI::Auth.auth_status }
       Then { result["config_exists"] == false }
       And  { result["tokens_exist"] == false }
     end
@@ -348,14 +348,14 @@ RSpec.describe FB::Auth do
       Given {
         ENV["FRESHBOOKS_CLIENT_ID"] = "id"
         ENV["FRESHBOOKS_CLIENT_SECRET"] = "sec"
-        FB::Auth.save_config("business_id" => 123, "account_id" => "acc")
-        FB::Auth.save_tokens("access_token" => "tok", "refresh_token" => "ref", "expires_in" => 3600, "created_at" => Time.now.to_i)
+        FreshBooks::CLI::Auth.save_config("business_id" => 123, "account_id" => "acc")
+        FreshBooks::CLI::Auth.save_tokens("access_token" => "tok", "refresh_token" => "ref", "expires_in" => 3600, "created_at" => Time.now.to_i)
       }
       after {
         ENV.delete("FRESHBOOKS_CLIENT_ID")
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
-      When(:result) { FB::Auth.auth_status }
+      When(:result) { FreshBooks::CLI::Auth.auth_status }
       Then { result["config_exists"] == true }
       And  { result["tokens_exist"] == true }
       And  { result["tokens_expired"] == false }
@@ -367,7 +367,7 @@ RSpec.describe FB::Auth do
 
   describe ".fetch_businesses" do
     Given {
-      stub_request(:get, FB::Auth::ME_URL)
+      stub_request(:get, FreshBooks::CLI::Auth::ME_URL)
         .to_return(
           status: 200,
           headers: { "Content-Type" => "application/json" },
@@ -381,7 +381,7 @@ RSpec.describe FB::Auth do
           }.to_json
         )
     }
-    When(:result) { FB::Auth.fetch_businesses("token") }
+    When(:result) { FreshBooks::CLI::Auth.fetch_businesses("token") }
     Then { result.length == 2 }
     And  { result.first.dig("business", "name") == "Biz One" }
   end
@@ -406,8 +406,8 @@ RSpec.describe FB::Auth do
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
       When(:result) {
-        config = FB::Auth.load_config
-        FB::Auth.select_business(config, 2, businesses)
+        config = FreshBooks::CLI::Auth.load_config
+        FreshBooks::CLI::Auth.select_business(config, 2, businesses)
       }
       Then { result["business_id"] == 2 }
       And  { result["account_id"] == "acc2" }
@@ -423,8 +423,8 @@ RSpec.describe FB::Auth do
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
       When(:result) {
-        config = FB::Auth.load_config
-        FB::Auth.select_business(config, 999, businesses)
+        config = FreshBooks::CLI::Auth.load_config
+        FreshBooks::CLI::Auth.select_business(config, 999, businesses)
       }
       Then { result == Failure(SystemExit) }
     end
@@ -434,22 +434,22 @@ RSpec.describe FB::Auth do
 
   describe ".load_defaults" do
     context "with no file" do
-      When(:result) { FB::Auth.load_defaults }
+      When(:result) { FreshBooks::CLI::Auth.load_defaults }
       Then { result == {} }
     end
 
     context "with valid file" do
-      Given { FB::Auth.save_defaults("client_id" => 123) }
-      When(:result) { FB::Auth.load_defaults }
+      Given { FreshBooks::CLI::Auth.save_defaults("client_id" => 123) }
+      When(:result) { FreshBooks::CLI::Auth.load_defaults }
       Then { result == { "client_id" => 123 } }
     end
   end
 
   describe ".save_defaults" do
-    When { FB::Auth.save_defaults("project_id" => 42) }
-    Then { File.exist?(FB::Auth.defaults_path) }
+    When { FreshBooks::CLI::Auth.save_defaults("project_id" => 42) }
+    Then { File.exist?(FreshBooks::CLI::Auth.defaults_path) }
     And {
-      JSON.parse(File.read(FB::Auth.defaults_path)) == { "project_id" => 42 }
+      JSON.parse(File.read(FreshBooks::CLI::Auth.defaults_path)) == { "project_id" => 42 }
     }
   end
 
@@ -457,15 +457,15 @@ RSpec.describe FB::Auth do
 
   describe ".load_cache" do
     context "with no file" do
-      When(:result) { FB::Auth.load_cache }
+      When(:result) { FreshBooks::CLI::Auth.load_cache }
       Then { result == {} }
     end
   end
 
   describe ".save_cache" do
-    When { FB::Auth.save_cache("updated_at" => 100) }
+    When { FreshBooks::CLI::Auth.save_cache("updated_at" => 100) }
     Then {
-      JSON.parse(File.read(FB::Auth.cache_path)) == { "updated_at" => 100 }
+      JSON.parse(File.read(FreshBooks::CLI::Auth.cache_path)) == { "updated_at" => 100 }
     }
   end
 
@@ -480,20 +480,20 @@ RSpec.describe FB::Auth do
     end
 
     context "with no saved tokens" do
-      When(:result) { FB::Auth.valid_access_token }
+      When(:result) { FreshBooks::CLI::Auth.valid_access_token }
       Then { result == "dry-run-token" }
     end
 
     context "with a valid saved token" do
       Given {
-        FB::Auth.save_tokens({
+        FreshBooks::CLI::Auth.save_tokens({
           "access_token" => "real-token-123",
           "refresh_token" => "refresh-abc",
           "expires_in" => 3600,
           "created_at" => Time.now.to_i
         })
       }
-      When(:result) { FB::Auth.valid_access_token }
+      When(:result) { FreshBooks::CLI::Auth.valid_access_token }
       Then { result == "real-token-123" }
     end
   end
@@ -507,9 +507,9 @@ RSpec.describe FB::Auth do
     end
 
     Given {
-      FB::Auth.save_config("business_id" => 99, "account_id" => "acc1")
+      FreshBooks::CLI::Auth.save_config("business_id" => 99, "account_id" => "acc1")
     }
-    When(:result) { FB::Auth.require_config }
+    When(:result) { FreshBooks::CLI::Auth.require_config }
     Then { result["business_id"] == 99 }
     And  { result["account_id"] == "acc1" }
   end
@@ -522,7 +522,7 @@ RSpec.describe FB::Auth do
       Thread.current[:fb_dry_run] = false
     end
 
-    When(:result) { FB::Auth.require_config }
+    When(:result) { FreshBooks::CLI::Auth.require_config }
     Then { result["business_id"] == "0" }
     And  { result["account_id"] == "0" }
   end

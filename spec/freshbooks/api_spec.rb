@@ -2,7 +2,7 @@
 
 require "json"
 
-RSpec.describe FB::Api do
+RSpec.describe FreshBooks::CLI::Api do
   let(:access_token) { "test_token_123" }
   let(:config) {
     { "client_id" => "cid", "client_secret" => "csec",
@@ -10,8 +10,8 @@ RSpec.describe FB::Api do
   }
 
   before do
-    allow(FB::Auth).to receive(:valid_access_token).and_return(access_token)
-    allow(FB::Auth).to receive(:require_config).and_return(config)
+    allow(FreshBooks::CLI::Auth).to receive(:valid_access_token).and_return(access_token)
+    allow(FreshBooks::CLI::Auth).to receive(:require_config).and_return(config)
   end
 
   # --- fetch_time_entries URL params ---
@@ -33,7 +33,7 @@ RSpec.describe FB::Api do
         )
     }
     When(:result) {
-      FB::Api.fetch_time_entries(started_from: "2024-03-01", started_to: "2024-03-31")
+      FreshBooks::CLI::Api.fetch_time_entries(started_from: "2024-03-01", started_to: "2024-03-31")
     }
     Then { result.length == 1 }
     And  { result.first["id"] == 1 }
@@ -44,7 +44,7 @@ RSpec.describe FB::Api do
   describe ".fetch_all_pages" do
     context "with 2-page response" do
       Given {
-        url = "#{FB::Api::BASE}/timetracking/business/12345/time_entries"
+        url = "#{FreshBooks::CLI::Api::BASE}/timetracking/business/12345/time_entries"
         stub_request(:get, url)
           .with(query: hash_including("page" => "1"))
           .to_return(
@@ -72,8 +72,8 @@ RSpec.describe FB::Api do
           )
       }
       When(:result) {
-        FB::Api.fetch_all_pages(
-          "#{FB::Api::BASE}/timetracking/business/12345/time_entries",
+        FreshBooks::CLI::Api.fetch_all_pages(
+          "#{FreshBooks::CLI::Api::BASE}/timetracking/business/12345/time_entries",
           "time_entries"
         )
       }
@@ -122,7 +122,7 @@ RSpec.describe FB::Api do
             body: { "result" => { "services" => { "30" => { "id" => 30, "name" => "Dev" } } } }.to_json
           )
       }
-      When(:result) { FB::Api.build_name_maps }
+      When(:result) { FreshBooks::CLI::Api.build_name_maps }
       Then { result[:clients]["10"] == "Acme Corp" }
       And  { result[:projects]["20"] == "Website Redesign" }
       And  { result[:services]["30"] == "Dev" }
@@ -130,13 +130,13 @@ RSpec.describe FB::Api do
 
     context "with fresh cache (< 10 min old)" do
       Given {
-        FB::Auth.save_cache(
+        FreshBooks::CLI::Auth.save_cache(
           "updated_at" => Time.now.to_i - 60,
           "clients" => { "10" => "Cached Client" },
           "projects" => { "20" => "Cached Project" }
         )
       }
-      When(:result) { FB::Api.build_name_maps }
+      When(:result) { FreshBooks::CLI::Api.build_name_maps }
       Then { result[:clients]["10"] == "Cached Client" }
       And  { result[:projects]["20"] == "Cached Project" }
       And  {
@@ -161,7 +161,7 @@ RSpec.describe FB::Api do
           }.to_json
         )
     }
-    When(:result) { FB::Api.fetch_time_entry(999) }
+    When(:result) { FreshBooks::CLI::Api.fetch_time_entry(999) }
     Then { result["id"] == 999 }
     And  { result["duration"] == 7200 }
   end
@@ -181,7 +181,7 @@ RSpec.describe FB::Api do
           }.to_json
         )
     }
-    When(:result) { FB::Api.update_time_entry(999, { "duration" => 5400, "note" => "Updated" }) }
+    When(:result) { FreshBooks::CLI::Api.update_time_entry(999, { "duration" => 5400, "note" => "Updated" }) }
     Then { result["result"]["time_entry"]["note"] == "Updated" }
   end
 
@@ -192,7 +192,7 @@ RSpec.describe FB::Api do
       stub_request(:delete, %r{api\.freshbooks\.com/timetracking/business/12345/time_entries/999})
         .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: "")
     }
-    When(:result) { FB::Api.delete_time_entry(999) }
+    When(:result) { FreshBooks::CLI::Api.delete_time_entry(999) }
     Then { result == true }
   end
 
@@ -203,12 +203,12 @@ RSpec.describe FB::Api do
 
     context "fetch_clients returns cached data when fresh" do
       Given {
-        FB::Auth.save_cache(
+        FreshBooks::CLI::Auth.save_cache(
           "updated_at" => Time.now.to_i - 60,
           "clients_data" => [{ "id" => 10, "organization" => "Cached" }]
         )
       }
-      When(:result) { FB::Api.fetch_clients }
+      When(:result) { FreshBooks::CLI::Api.fetch_clients }
       Then { result.first["organization"] == "Cached" }
       And  {
         assert_not_requested(:get, clients_url)
@@ -218,7 +218,7 @@ RSpec.describe FB::Api do
 
     context "fetch_clients hits API when force: true" do
       Given {
-        FB::Auth.save_cache(
+        FreshBooks::CLI::Auth.save_cache(
           "updated_at" => Time.now.to_i - 60,
           "clients_data" => [{ "id" => 10, "organization" => "Cached" }]
         )
@@ -234,7 +234,7 @@ RSpec.describe FB::Api do
             }.to_json
           )
       }
-      When(:result) { FB::Api.fetch_clients(force: true) }
+      When(:result) { FreshBooks::CLI::Api.fetch_clients(force: true) }
       Then { result.first["organization"] == "Fresh" }
     end
   end
@@ -244,14 +244,14 @@ RSpec.describe FB::Api do
   describe ".build_name_maps with services" do
     context "with fresh cache including services" do
       Given {
-        FB::Auth.save_cache(
+        FreshBooks::CLI::Auth.save_cache(
           "updated_at" => Time.now.to_i - 60,
           "clients" => { "10" => "Client" },
           "projects" => { "20" => "Project" },
           "services" => { "30" => "Development" }
         )
       }
-      When(:result) { FB::Api.build_name_maps }
+      When(:result) { FreshBooks::CLI::Api.build_name_maps }
       Then { result[:services]["30"] == "Development" }
     end
   end
@@ -259,12 +259,12 @@ RSpec.describe FB::Api do
   # --- business_id / account_id ---
 
   describe ".business_id" do
-    When(:result) { FB::Api.business_id }
+    When(:result) { FreshBooks::CLI::Api.business_id }
     Then { result == 12345 }
   end
 
   describe ".account_id" do
-    When(:result) { FB::Api.account_id }
+    When(:result) { FreshBooks::CLI::Api.account_id }
     Then { result == "acc99" }
   end
 
@@ -284,21 +284,21 @@ RSpec.describe FB::Api do
           "updated_at" => Time.now.to_i - 700,
           "clients_data" => [{ "id" => 1, "organization" => "Acme" }]
         }
-        FB::Auth.save_cache(stale_cache)
+        FreshBooks::CLI::Auth.save_cache(stale_cache)
       }
-      When(:result) { FB::Api.cached_data("clients_data") }
+      When(:result) { FreshBooks::CLI::Api.cached_data("clients_data") }
       Then { result == [{ "id" => 1, "organization" => "Acme" }] }
     end
 
     describe ".fetch_all_pages returns empty array in dry-run" do
       When(:result) {
-        FB::Api.fetch_all_pages("https://api.freshbooks.com/fake", "items")
+        FreshBooks::CLI::Api.fetch_all_pages("https://api.freshbooks.com/fake", "items")
       }
       Then { result == [] }
     end
 
     describe ".fetch_services returns empty array in dry-run (no HTTP)" do
-      When(:result) { FB::Api.fetch_services }
+      When(:result) { FreshBooks::CLI::Api.fetch_services }
       Then { result == [] }
     end
 
@@ -308,9 +308,9 @@ RSpec.describe FB::Api do
           "updated_at" => Time.now.to_i - 700,
           "services_data" => [{ "id" => 5, "name" => "Dev" }]
         }
-        FB::Auth.save_cache(stale_cache)
+        FreshBooks::CLI::Auth.save_cache(stale_cache)
       }
-      When(:result) { FB::Api.fetch_services }
+      When(:result) { FreshBooks::CLI::Api.fetch_services }
       Then { result == [{ "id" => 5, "name" => "Dev" }] }
     end
 
@@ -323,7 +323,7 @@ RSpec.describe FB::Api do
             body: { "result" => { "time_entry" => { "id" => 42, "duration" => 7200, "is_logged" => true } } }.to_json
           )
       }
-      When(:result) { FB::Api.fetch_time_entry(42) }
+      When(:result) { FreshBooks::CLI::Api.fetch_time_entry(42) }
       Then { result["id"] == 42 }
       And  { result["duration"] == 7200 }
     end
@@ -341,7 +341,7 @@ RSpec.describe FB::Api do
 
     describe ".create_time_entry returns mock response in dry-run" do
       let(:entry) { { "duration" => 3600, "note" => "test", "client_id" => 10 } }
-      When(:result) { FB::Api.create_time_entry(entry) }
+      When(:result) { FreshBooks::CLI::Api.create_time_entry(entry) }
       Then { result["_dry_run"]["simulated"] == true }
       And  { result["_dry_run"]["payload_sent"] == entry }
       And  { result["result"]["time_entry"]["id"] == 0 }
@@ -350,7 +350,7 @@ RSpec.describe FB::Api do
 
     describe ".update_time_entry returns mock response in dry-run" do
       let(:fields) { { "duration" => 5400, "note" => "updated" } }
-      When(:result) { FB::Api.update_time_entry(99, fields) }
+      When(:result) { FreshBooks::CLI::Api.update_time_entry(99, fields) }
       Then { result["_dry_run"]["simulated"] == true }
       And  { result["_dry_run"]["payload_sent"] == fields }
       And  { result["result"]["time_entry"]["id"] == 99 }
@@ -358,7 +358,7 @@ RSpec.describe FB::Api do
     end
 
     describe ".delete_time_entry returns true in dry-run" do
-      When(:result) { FB::Api.delete_time_entry(99) }
+      When(:result) { FreshBooks::CLI::Api.delete_time_entry(99) }
       Then { result == true }
     end
   end
