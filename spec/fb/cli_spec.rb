@@ -977,6 +977,16 @@ RSpec.describe FB::Cli do
           json["_dry_run"]["simulated"] == true
         }
       end
+
+      context "json output includes _dry_run.payload_sent" do
+        When(:stdout) {
+          capture_stdout {
+            FB::Cli.start(["log", "--client", "Acme Corp", "--duration", "1.5",
+                           "--note", "test work", "--yes", "--dry-run", "--format", "json"])
+          }
+        }
+        Then { JSON.parse(stdout)["_dry_run"].key?("payload_sent") }
+      end
     end
 
     describe "edit --dry-run" do

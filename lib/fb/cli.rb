@@ -36,8 +36,9 @@ module FB
           end
           begin
             data = JSON.parse(buffer.string)
-            meta = { "_dry_run" => { "simulated" => true } }
-            wrapped = data.is_a?(Array) ? meta.merge("data" => data) : data.merge(meta)
+            existing_dry_run = data.is_a?(Hash) ? (data["_dry_run"] || {}) : {}
+            meta = { "_dry_run" => existing_dry_run.merge("simulated" => true) }
+            wrapped = data.is_a?(Array) ? { "_dry_run" => { "simulated" => true } }.merge("data" => data) : data.merge(meta)
             puts JSON.pretty_generate(wrapped)
           rescue JSON::ParserError
             print buffer.string
