@@ -105,6 +105,8 @@ All commands support `--format json` (global class option). Mutation commands (`
 - When creating a plan, the first task should be updating the related GitHub issue with the full contents of the design spec only (not the implementation plan, not just links).
 - If there is no GitHub issue for the work, suggest creating one and upload the plan to the newly created issue.
 - The last task in a plan should be updating or creating ALL related documentation: README, AGENTS.md, and any skill files (e.g. `skills/*/SKILL.md`) that reference changed behavior or conventions.
+- **AGENTS.md must be self-contained.** Never reference local or global config files (e.g. `~/.claude/CLAUDE.md`, `settings.json`) — those are not available to other developers or agents running in different environments. All guidance belongs in this file directly.
+- **Never include real user data in issues or PRs.** FreshBooks client names, entry IDs, project names, and any live API data must be replaced with generic placeholders (e.g. `"My Client"`, `<entry-id>`) before posting.
 
 ## Skills
 
