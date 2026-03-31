@@ -24,12 +24,33 @@ module FreshBooks
 
       class << self
         def data_dir
-          @data_dir ||= File.join(Dir.home, ".fb")
+          return @data_dir unless @data_dir.nil?
+          resolve_data_dir
         end
 
         def data_dir=(path)
           @data_dir = path
         end
+
+        private
+
+        def macos?
+          RUBY_PLATFORM.include?("darwin")
+        end
+
+        def resolve_data_dir
+          return ENV["FRESHBOOKS_HOME"] if ENV["FRESHBOOKS_HOME"]
+          legacy = File.join(Dir.home, ".fb")
+          return legacy if File.exist?(legacy)
+          if macos?
+            File.join(Dir.home, "Library", "Application Support", "freshbooks")
+          else
+            xdg_base = ENV["XDG_CONFIG_HOME"] || File.join(Dir.home, ".config")
+            File.join(xdg_base, "freshbooks")
+          end
+        end
+
+        public
 
         def config_path
           File.join(data_dir, "config.json")
@@ -156,11 +177,11 @@ module FreshBooks
           client_secret = ENV["FRESHBOOKS_CLIENT_SECRET"]
 
           if client_id.nil? || client_id.strip.empty?
-            abort("Missing FRESHBOOKS_CLIENT_ID. Set it via:\n  export FRESHBOOKS_CLIENT_ID=your_id\n  or add it to ~/.fb/.env")
+            abort("Missing FRESHBOOKS_CLIENT_ID. Set it via:\n  export FRESHBOOKS_CLIENT_ID=your_id\n  or add it to #{data_dir}/.env")
           end
 
           if client_secret.nil? || client_secret.strip.empty?
-            abort("Missing FRESHBOOKS_CLIENT_SECRET. Set it via:\n  export FRESHBOOKS_CLIENT_SECRET=your_secret\n  or add it to ~/.fb/.env")
+            abort("Missing FRESHBOOKS_CLIENT_SECRET. Set it via:\n  export FRESHBOOKS_CLIENT_SECRET=your_secret\n  or add it to #{data_dir}/.env")
           end
 
           { "client_id" => client_id.strip, "client_secret" => client_secret.strip }
