@@ -280,7 +280,7 @@ RSpec.describe FreshBooks::CLI::Auth do
   describe ".setup_config" do
     let(:env_path) { File.join(FreshBooks::CLI::Auth.data_dir, ".env") }
 
-    context "writes credentials to ~/.fb/.env" do
+    context "writes credentials to <data_dir>/.env" do
       Given {
         allow($stdin).to receive(:gets).and_return("my_client_id\n")
         console_double = instance_double(IO)
@@ -531,6 +531,8 @@ RSpec.describe FreshBooks::CLI::Auth do
 
   describe ".data_dir" do
     before do
+      ENV.delete("FRESHBOOKS_HOME")
+      ENV.delete("XDG_CONFIG_HOME")
       FreshBooks::CLI::Auth.data_dir = nil
     end
 

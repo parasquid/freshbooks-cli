@@ -1,6 +1,6 @@
 # Config Directory Resolution & Module Rename Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Rename the `FB` Ruby module to `FreshBooks::CLI` throughout, and add platform-native config directory resolution with `FRESHBOOKS_HOME` override support.
 
@@ -12,13 +12,13 @@
 
 ### Task 0: Post design spec to GitHub issue #5
 
-- [ ] **Step 1: Post the full design spec**
+- [x] **Step 1: Post the full design spec**
 
 ```bash
 gh issue comment 5 --body "$(cat docs/plans/2026-03-31-config-dir-and-module-rename-design.md)"
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add docs/plans/2026-03-31-config-dir-and-module-rename-plan.md
@@ -29,7 +29,7 @@ git commit -m "docs(plans): add implementation plan for config dir resolution an
 
 ### Task 1: Create feature branch
 
-- [ ] **Step 1: Create and switch to branch**
+- [x] **Step 1: Create and switch to branch**
 
 ```bash
 git checkout -b 5-support-configurable-config-directory-via-environment-variable
@@ -41,14 +41,14 @@ git checkout -b 5-support-configurable-config-directory-via-environment-variable
 
 These files only have module declaration changes — no logic.
 
-- [ ] **Step 1: Create the new directory and move version.rb**
+- [x] **Step 1: Create the new directory and move version.rb**
 
 ```bash
 mkdir -p lib/freshbooks
 git mv lib/fb/version.rb lib/freshbooks/version.rb
 ```
 
-- [ ] **Step 2: Update module declaration in lib/freshbooks/version.rb**
+- [x] **Step 2: Update module declaration in lib/freshbooks/version.rb**
 
 Change:
 ```ruby
@@ -65,13 +65,13 @@ module FreshBooks
 end
 ```
 
-- [ ] **Step 3: Move spinner.rb**
+- [x] **Step 3: Move spinner.rb**
 
 ```bash
 git mv lib/fb/spinner.rb lib/freshbooks/spinner.rb
 ```
 
-- [ ] **Step 4: Rewrite lib/freshbooks/spinner.rb with updated module namespace**
+- [x] **Step 4: Rewrite lib/freshbooks/spinner.rb with updated module namespace**
 
 Replace the entire file content with:
 
@@ -128,7 +128,7 @@ module FreshBooks
 end
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/freshbooks/version.rb lib/freshbooks/spinner.rb
@@ -139,13 +139,13 @@ git commit -m "refactor: rename FB::VERSION and FB::Spinner to FreshBooks::CLI"
 
 ### Task 3: Rename auth.rb (rename only, feature comes later)
 
-- [ ] **Step 1: Move the file**
+- [x] **Step 1: Move the file**
 
 ```bash
 git mv lib/fb/auth.rb lib/freshbooks/auth.rb
 ```
 
-- [ ] **Step 2: Update module declaration in lib/freshbooks/auth.rb**
+- [x] **Step 2: Update module declaration in lib/freshbooks/auth.rb**
 
 Change:
 ```ruby
@@ -171,7 +171,7 @@ To:
 end
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add lib/freshbooks/auth.rb
@@ -182,13 +182,13 @@ git commit -m "refactor: rename FB::Auth to FreshBooks::CLI::Auth"
 
 ### Task 4: Rename api.rb
 
-- [ ] **Step 1: Move the file**
+- [x] **Step 1: Move the file**
 
 ```bash
 git mv lib/fb/api.rb lib/freshbooks/api.rb
 ```
 
-- [ ] **Step 2: Update module declaration in lib/freshbooks/api.rb**
+- [x] **Step 2: Update module declaration in lib/freshbooks/api.rb**
 
 Change:
 ```ruby
@@ -214,7 +214,7 @@ To:
 end
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add lib/freshbooks/api.rb
@@ -225,13 +225,13 @@ git commit -m "refactor: rename FB::Api to FreshBooks::CLI::Api"
 
 ### Task 5: Rename cli.rb (FB::Cli → FreshBooks::CLI::Commands)
 
-- [ ] **Step 1: Move the file**
+- [x] **Step 1: Move the file**
 
 ```bash
 git mv lib/fb/cli.rb lib/freshbooks/cli.rb
 ```
 
-- [ ] **Step 2: Update module and class declaration in lib/freshbooks/cli.rb**
+- [x] **Step 2: Update module and class declaration in lib/freshbooks/cli.rb**
 
 Change:
 ```ruby
@@ -259,7 +259,7 @@ end
 
 No changes needed inside the class body — `Auth`, `Api`, `Spinner` are referenced by bare name, and Ruby's constant lookup finds them via the `FreshBooks::CLI` nesting.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add lib/freshbooks/cli.rb
@@ -270,13 +270,13 @@ git commit -m "refactor: rename FB::Cli to FreshBooks::CLI::Commands"
 
 ### Task 6: Rename main require file, update gemspec and bin
 
-- [ ] **Step 1: Move lib/fb.rb**
+- [x] **Step 1: Move lib/fb.rb**
 
 ```bash
 git mv lib/fb.rb lib/freshbooks.rb
 ```
 
-- [ ] **Step 2: Update lib/freshbooks.rb**
+- [x] **Step 2: Update lib/freshbooks.rb**
 
 Change:
 ```ruby
@@ -295,13 +295,13 @@ require_relative "freshbooks/api"
 require_relative "freshbooks/cli"
 ```
 
-- [ ] **Step 3: Delete the now-empty lib/fb/ directory**
+- [x] **Step 3: Delete the now-empty lib/fb/ directory**
 
 ```bash
 rmdir lib/fb
 ```
 
-- [ ] **Step 4: Update fb.gemspec**
+- [x] **Step 4: Update fb.gemspec**
 
 Change:
 ```ruby
@@ -321,7 +321,7 @@ To:
 s.version     = FreshBooks::CLI::VERSION
 ```
 
-- [ ] **Step 5: Update bin/fb**
+- [x] **Step 5: Update bin/fb**
 
 Change:
 ```ruby
@@ -336,7 +336,7 @@ require "freshbooks"
 FreshBooks::CLI::Commands.start(ARGV)
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib/freshbooks.rb fb.gemspec bin/fb
@@ -347,7 +347,7 @@ git commit -m "refactor: rename main require file and update entry points"
 
 ### Task 7: Rename and update spec files
 
-- [ ] **Step 1: Move spec files**
+- [x] **Step 1: Move spec files**
 
 ```bash
 mkdir -p spec/freshbooks
@@ -358,7 +358,7 @@ git mv spec/fb/spinner_spec.rb spec/freshbooks/spinner_spec.rb
 rmdir spec/fb
 ```
 
-- [ ] **Step 2: Update spec/spec_helper.rb**
+- [x] **Step 2: Update spec/spec_helper.rb**
 
 Change:
 ```ruby
@@ -393,23 +393,23 @@ To:
     allow(FreshBooks::CLI::Spinner).to receive(:spin) do |_msg, &block|
 ```
 
-- [ ] **Step 3: Update spec/freshbooks/spinner_spec.rb**
+- [x] **Step 3: Update spec/freshbooks/spinner_spec.rb**
 
 Replace all occurrences of `FB::Spinner` with `FreshBooks::CLI::Spinner`.
 
-- [ ] **Step 4: Update spec/freshbooks/auth_spec.rb**
+- [x] **Step 4: Update spec/freshbooks/auth_spec.rb**
 
 Replace all occurrences of `FB::Auth` with `FreshBooks::CLI::Auth`.
 
-- [ ] **Step 5: Update spec/freshbooks/api_spec.rb**
+- [x] **Step 5: Update spec/freshbooks/api_spec.rb**
 
 Replace all occurrences of `FB::Api` with `FreshBooks::CLI::Api`, and `FB::Auth` with `FreshBooks::CLI::Auth`.
 
-- [ ] **Step 6: Update spec/freshbooks/cli_spec.rb**
+- [x] **Step 6: Update spec/freshbooks/cli_spec.rb**
 
 Replace all occurrences of `FB::Cli` with `FreshBooks::CLI::Commands`, `FB::Auth` with `FreshBooks::CLI::Auth`, `FB::Api` with `FreshBooks::CLI::Api`, `FB::Spinner` with `FreshBooks::CLI::Spinner`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add spec/
@@ -420,7 +420,7 @@ git commit -m "refactor: update specs to use FreshBooks::CLI namespace"
 
 ### Task 8: Verify rename is clean
 
-- [ ] **Step 1: Run the full test suite**
+- [x] **Step 1: Run the full test suite**
 
 ```bash
 docker compose run --rm --entrypoint rspec fb
@@ -428,7 +428,7 @@ docker compose run --rm --entrypoint rspec fb
 
 Expected: all tests pass. If failures occur, they will be namespace resolution errors — check for any remaining `FB::` references.
 
-- [ ] **Step 2: Search for any remaining FB:: references**
+- [x] **Step 2: Search for any remaining FB:: references**
 
 ```bash
 grep -rn "FB::\|module FB\b\|class FB\b" lib/ spec/ bin/
@@ -444,7 +444,7 @@ All new tests go in `spec/freshbooks/auth_spec.rb`. Add a new `describe ".data_d
 
 The tests stub `macos?` (a private method we'll add) to control platform detection, and use `Dir.mktmpdir` to simulate the legacy path.
 
-- [ ] **Step 1: Add the failing tests**
+- [x] **Step 1: Add the failing tests**
 
 Add to `spec/freshbooks/auth_spec.rb`:
 
@@ -514,7 +514,7 @@ describe ".data_dir" do
 end
 ```
 
-- [ ] **Step 2: Run the new tests to verify they fail**
+- [x] **Step 2: Run the new tests to verify they fail**
 
 ```bash
 docker compose run --rm --entrypoint rspec fb spec/freshbooks/auth_spec.rb --example "data_dir"
@@ -526,7 +526,7 @@ Expected: failures like `undefined method 'macos?'` and wrong return values from
 
 ### Task 10: Implement `resolve_data_dir` in auth.rb
 
-- [ ] **Step 1: Replace the `data_dir` getter and add private helpers in lib/freshbooks/auth.rb**
+- [x] **Step 1: Replace the `data_dir` getter and add private helpers in lib/freshbooks/auth.rb**
 
 Replace:
 ```ruby
@@ -572,7 +572,7 @@ With:
 
 Note: `private` / `public` inside `class << self` controls singleton method visibility. `macos?` and `resolve_data_dir` are private class methods — they can be stubbed in tests via `allow(FreshBooks::CLI::Auth).to receive(:macos?)`.
 
-- [ ] **Step 2: Run the new tests**
+- [x] **Step 2: Run the new tests**
 
 ```bash
 docker compose run --rm --entrypoint rspec fb spec/freshbooks/auth_spec.rb --example "data_dir"
@@ -580,7 +580,7 @@ docker compose run --rm --entrypoint rspec fb spec/freshbooks/auth_spec.rb --exa
 
 Expected: all 6 new tests pass.
 
-- [ ] **Step 3: Run the full auth spec to check for regressions**
+- [x] **Step 3: Run the full auth spec to check for regressions**
 
 ```bash
 docker compose run --rm --entrypoint rspec fb spec/freshbooks/auth_spec.rb
@@ -588,7 +588,7 @@ docker compose run --rm --entrypoint rspec fb spec/freshbooks/auth_spec.rb
 
 Expected: all tests pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add lib/freshbooks/auth.rb spec/freshbooks/auth_spec.rb
@@ -604,7 +604,7 @@ Closes #5"
 
 ### Task 11: Run full test suite
 
-- [ ] **Step 1: Run all tests**
+- [x] **Step 1: Run all tests**
 
 ```bash
 docker compose run --rm --entrypoint rspec fb
@@ -618,13 +618,13 @@ Expected: all tests pass with no failures or errors.
 
 **Files:** `AGENTS.md`, `README.md` (if it exists and references `~/.fb` or module names).
 
-- [ ] **Step 1: Check README for references to update**
+- [x] **Step 1: Check README for references to update**
 
 ```bash
 grep -n "FB::\|~/.fb\|FB module\|require.*fb" README.md 2>/dev/null || echo "No README or no matches"
 ```
 
-- [ ] **Step 2: Update AGENTS.md**
+- [x] **Step 2: Update AGENTS.md**
 
 In the **Architecture** section, update:
 - `FB::Auth` → `FreshBooks::CLI::Auth`
@@ -644,11 +644,11 @@ In the **Dry-Run Mode** section, update:
 In the **Key Patterns** section, update:
 - `Auth.data_dir=` seam description to mention `FRESHBOOKS_HOME` and platform-native defaults
 
-- [ ] **Step 3: Update README if needed**
+- [x] **Step 3: Update README if needed**
 
 If README references `~/.fb`, add a note that `~/.fb` is the legacy path, new installs use a platform-native location, and `FRESHBOOKS_HOME` overrides it.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add AGENTS.md README.md
