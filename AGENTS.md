@@ -131,7 +131,7 @@ All commands support `--format json` (global class option). Mutation commands (`
 - To install this repo's skill bundle into Codex, run:
 
 ```bash
-npx skills add https://github.com/parasquid/freshbooks-cli/tree/master/skills
+npx skills add https://skills.sh/parasquid/freshbooks-cli/freshbooks
 ```
 
 ## Superpowers Overrides

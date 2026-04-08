@@ -37,7 +37,7 @@ Both install `fb` to your PATH — runs natively, no Docker involved. Data store
 If you want the repo's Codex skill bundle, install it directly from GitHub:
 
 ```bash
-npx skills add https://github.com/parasquid/freshbooks-cli/tree/master/skills
+npx skills add https://skills.sh/parasquid/freshbooks-cli/freshbooks
 ```
 
 ## Setup

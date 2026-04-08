@@ -14,7 +14,7 @@ Manage FreshBooks time entries using the `fb` CLI tool.
 To install this repo's skill bundle into Codex:
 
 ```bash
-npx skills add https://github.com/parasquid/freshbooks-cli/tree/master/skills
+npx skills add https://skills.sh/parasquid/freshbooks-cli/freshbooks
 ```
 
 ## Prerequisites
