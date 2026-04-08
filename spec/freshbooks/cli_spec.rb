@@ -4,6 +4,8 @@ require "json"
 require "date"
 
 RSpec.describe FreshBooks::CLI::Commands do
+  class CliAbort < StandardError; end
+
   let(:access_token) { "test_token" }
   let(:config) {
     { "client_id" => "cid", "client_secret" => "csec",
@@ -413,10 +415,8 @@ RSpec.describe FreshBooks::CLI::Commands do
       Given {
         allow($stdin).to receive(:gets).and_return("n\n")
       }
-      When(:result) {
-        capture_stdout { FreshBooks::CLI::Commands.start(["delete", "--id", "999"]) }
-      }
-      Then { result == Failure(SystemExit) }
+      When(:result) { invoke_cli_command(:delete, id: 999, stub_abort: true) }
+      Then { result.is_a?(CliAbort) }
     end
 
     context "with --id --yes --format json" do
@@ -437,10 +437,8 @@ RSpec.describe FreshBooks::CLI::Commands do
       Given {
         allow($stdin).to receive(:tty?).and_return(false)
       }
-      When(:result) {
-        capture_stdout { FreshBooks::CLI::Commands.start(["delete"]) }
-      }
-      Then { result == Failure(SystemExit) }
+      When(:result) { invoke_cli_command(:delete, no_interactive: false, stub_abort: true) }
+      Then { result.is_a?(CliAbort) }
     end
   end
 
@@ -524,10 +522,8 @@ RSpec.describe FreshBooks::CLI::Commands do
       Given {
         allow($stdin).to receive(:tty?).and_return(false)
       }
-      When(:result) {
-        capture_stdout { FreshBooks::CLI::Commands.start(["edit"]) }
-      }
-      Then { result == Failure(SystemExit) }
+      When(:result) { invoke_cli_command(:edit, no_interactive: false, stub_abort: true) }
+      Then { result.is_a?(CliAbort) }
     end
   end
 
@@ -609,11 +605,9 @@ RSpec.describe FreshBooks::CLI::Commands do
         stub_log_apis
       }
       When(:result) {
-        capture_stdout {
-          FreshBooks::CLI::Commands.start(["log", "--client", "Acme Corp", "--note", "test work", "--yes"])
-        }
+        invoke_cli_command(:log, client: "Acme Corp", note: "test work", yes: true, no_interactive: false, stub_abort: true)
       }
-      Then { result == Failure(SystemExit) }
+      Then { result.is_a?(CliAbort) }
     end
 
     context "non-interactive missing --note aborts" do
@@ -622,11 +616,9 @@ RSpec.describe FreshBooks::CLI::Commands do
         stub_log_apis
       }
       When(:result) {
-        capture_stdout {
-          FreshBooks::CLI::Commands.start(["log", "--client", "Acme Corp", "--duration", "2.5", "--yes"])
-        }
+        invoke_cli_command(:log, client: "Acme Corp", duration: 2.5, yes: true, no_interactive: false, stub_abort: true)
       }
-      Then { result == Failure(SystemExit) }
+      Then { result.is_a?(CliAbort) }
     end
 
     context "non-interactive single client auto-selects" do
@@ -661,11 +653,9 @@ RSpec.describe FreshBooks::CLI::Commands do
           )
       }
       When(:result) {
-        capture_stdout {
-          FreshBooks::CLI::Commands.start(["log", "--duration", "2.5", "--note", "test", "--yes"])
-        }
+        invoke_cli_command(:log, duration: 2.5, note: "test", yes: true, no_interactive: false, stub_abort: true)
       }
-      Then { result == Failure(SystemExit) }
+      Then { result.is_a?(CliAbort) }
     end
   end
 
@@ -776,15 +766,18 @@ RSpec.describe FreshBooks::CLI::Commands do
         ENV.delete("FRESHBOOKS_CLIENT_ID")
         ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
-      When(:result) {
-        capture_stdout { FreshBooks::CLI::Commands.start(["auth", "setup"]) }
-      }
-      Then { result == Failure(SystemExit) }
+      When(:result) { invoke_cli_command(:auth, "setup", stub_auth_abort: true) }
+      Then { result.is_a?(CliAbort) }
     end
 
     context "url with config" do
       Given {
-        FreshBooks::CLI::Auth.save_config("client_id" => "cid", "client_secret" => "csec")
+        ENV["FRESHBOOKS_CLIENT_ID"] = "cid"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "csec"
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
       When(:output) {
         capture_stdout { FreshBooks::CLI::Commands.start(["auth", "url"]) }
@@ -795,7 +788,12 @@ RSpec.describe FreshBooks::CLI::Commands do
 
     context "url with --format json" do
       Given {
-        FreshBooks::CLI::Auth.save_config("client_id" => "cid", "client_secret" => "csec")
+        ENV["FRESHBOOKS_CLIENT_ID"] = "cid"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "csec"
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
       }
       When(:output) {
         capture_stdout { FreshBooks::CLI::Commands.start(["auth", "url", "--format", "json"]) }
@@ -807,10 +805,8 @@ RSpec.describe FreshBooks::CLI::Commands do
     end
 
     context "url without config aborts" do
-      When(:result) {
-        capture_stdout { FreshBooks::CLI::Commands.start(["auth", "url"]) }
-      }
-      Then { result == Failure(SystemExit) }
+      When(:result) { invoke_cli_command(:auth, "url", stub_abort: true) }
+      Then { result.is_a?(CliAbort) }
     end
 
     context "status" do
@@ -835,10 +831,8 @@ RSpec.describe FreshBooks::CLI::Commands do
       Given {
         allow($stdin).to receive(:tty?).and_return(false)
       }
-      When(:result) {
-        capture_stdout { FreshBooks::CLI::Commands.start(["auth"]) }
-      }
-      Then { result == Failure(SystemExit) }
+      When(:result) { invoke_cli_command(:auth, stub_abort: true) }
+      Then { result.is_a?(CliAbort) }
     end
   end
 
@@ -1125,6 +1119,17 @@ def capture_stdout
   $stdout.string
 ensure
   $stdout = original
+end
+
+def invoke_cli_command(command_name, *args, stub_abort: false, stub_auth_abort: false, **options)
+  command = FreshBooks::CLI::Commands.new([], options)
+  allow(command).to receive(:abort) { raise CliAbort } if stub_abort
+  allow(FreshBooks::CLI::Auth).to receive(:abort) { raise CliAbort } if stub_auth_abort
+  capture_stdout do
+    command.public_send(command_name, *args)
+  end
+rescue CliAbort => e
+  e
 end
 
 def capture_stderr

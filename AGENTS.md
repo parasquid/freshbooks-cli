@@ -92,6 +92,9 @@ All commands support `--format json` (global class option). Mutation commands (`
 ## Testing Conventions
 
 - **rspec-given** style: `Given`/`When`/`Then` blocks, not `describe`/`it`/`expect`
+- Keep `rspec-given` syntax in place when editing specs. Do not convert any example, helper-driven case, or whole file to plain `it`/`expect` unless the user explicitly asks for a testing-style change.
+- If a spec needs a different shape to make `rspec-given` work, keep the assertion inside `Given`/`When`/`Then` and adapt the helper or command invocation instead of rewriting the example as an RSpec `it`.
+- For CLI abort paths in `spec/freshbooks/cli_spec.rb`, avoid changing the overall example style just to catch `SystemExit`. Prefer an isolated helper pattern or a lower-level test target that does not poison the suite exit status.
 - `Failure(SystemExit)` for testing `abort` calls
 - **webmock** stubs HTTP at the socket level — never stub HTTParty directly
 - **File I/O** uses real files in a tmpdir (spec_helper sets `FreshBooks::CLI::Auth.data_dir = tmpdir` before each test and resets it with `FreshBooks::CLI::Auth.data_dir = nil` after — using the public setter, not `instance_variable_set`)
