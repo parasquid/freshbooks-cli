@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
     paths:
-      - lib/fb/version.rb
+      - lib/freshbooks/version.rb
 
 jobs:
   release:
@@ -25,7 +25,7 @@ jobs:
       - name: Check if version is already published
         id: check
         run: |
-          LOCAL_VERSION=$(ruby -r ./lib/fb/version -e "puts FB::VERSION")
+          LOCAL_VERSION=$(ruby -r ./lib/freshbooks/version -e "puts FreshBooks::CLI::VERSION")
           echo "local_version=$LOCAL_VERSION" >> "$GITHUB_OUTPUT"
 
           PUBLISHED=$(gem search freshbooks-cli --remote --exact | grep -oP '\d+\.\d+\.\d+' || echo "0.0.0")
