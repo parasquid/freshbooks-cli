@@ -128,6 +128,11 @@ All commands support `--format json` (global class option). Mutation commands (`
 ## Skills
 
 - **FreshBooks** (`skills/freshbooks/SKILL.md`) — Time tracking via the `fb` CLI. Auto-activates for time tracking queries.
+- To install this repo's skill bundle into Codex, run:
+
+```bash
+npx skills add https://github.com/parasquid/freshbooks-cli/tree/master/skills
+```
 
 ## Superpowers Overrides
 

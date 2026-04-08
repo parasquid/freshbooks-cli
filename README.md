@@ -32,6 +32,14 @@ fb auth
 
 Both install `fb` to your PATH — runs natively, no Docker involved. Data stored in `~/Library/Application Support/freshbooks/` (macOS) or `~/.config/freshbooks/` (Linux). Existing `~/.fb/` installs are detected automatically and continue to work unchanged.
 
+### Skills
+
+If you want the repo's Codex skill bundle, install it directly from GitHub:
+
+```bash
+npx skills add https://github.com/parasquid/freshbooks-cli/tree/master/skills
+```
+
 ## Setup
 
 Running any command for the first time triggers setup:
