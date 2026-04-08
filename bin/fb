@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require "fb"
+require "freshbooks"
 
-FB::Cli.start(ARGV)
+FreshBooks::CLI::Commands.start(ARGV)

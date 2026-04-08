@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require_relative "lib/fb/version"
+require_relative "lib/freshbooks/version"
 
 Gem::Specification.new do |s|
   s.name        = "freshbooks-cli"
-  s.version     = FB::VERSION
+  s.version     = FreshBooks::CLI::VERSION
   s.summary     = "FreshBooks time tracking CLI"
   s.description = "Manage FreshBooks time entries from the command line. Supports OAuth2 auth, interactive time logging with defaults, and monthly entry listings."
   s.authors     = ["parasquid"]
