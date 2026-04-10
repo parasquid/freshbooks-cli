@@ -16,7 +16,7 @@ docker compose run --rm --entrypoint rspec fb spec/freshbooks/auth_spec.rb
 gem build fb.gemspec && gem install freshbooks-cli-*.gem
 rspec
 
-# Release (bumps tag, pushes gem to RubyGems)
+# Release (CI uses RubyGems trusted publishing; local release still uses rake release)
 rake release
 ```
 
