@@ -60,7 +60,7 @@ jobs:
 
       - name: Release gem
         if: steps.check.outputs.skip == 'false'
-        uses: rubygems/release-gem@v1
+        uses: rubygems/release-gem@v1.2.0
 
       - name: Create GitHub Release
         if: steps.check.outputs.skip == 'false'
