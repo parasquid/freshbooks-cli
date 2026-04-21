@@ -176,9 +176,15 @@ Time entry created!
 ```bash
 fb log --client "Acme Corp" --project "Website Redesign" --service "Development" --duration 2.5 --note "Built API endpoints" --yes
 fb log --client "Acme Corp" --duration 2.5 --note "Work" --yes --format json  # JSON output with entry ID
+fb log --project "AI Service Design" --service "Meetings" --duration 0.5 --note "Calum 1:1" --yes --format json
+fb log --internal --project "AI Service Design" --service "Meetings" --duration 0.5 --note "Calum 1:1" --yes --format json
 ```
 
-**Note:** Services are project-scoped. Use `fb projects --format json` to see available services per project.
+**Notes:**
+- Services are project-scoped. Use `fb projects --format json` to see available services per project.
+- Internal projects can be logged without `--client`.
+- When `--project` is supplied without `--client`, the CLI performs a fresh project lookup and derives the client from that project. Internal projects omit `client_id`.
+- `--internal` requires `--project` and conflicts with `--client`.
 
 ### `fb entries`
 
@@ -224,6 +230,8 @@ fb projects --client "Acme Corp"   # Filter by client name
 fb projects --format json          # Machine-readable output
 ```
 
+Internal projects display as `Internal` in the Client column.
+
 ### `fb services`
 
 List business-level services. Note: most services in FreshBooks are project-scoped — use `fb projects --format json` to see services per project.
@@ -258,6 +266,8 @@ This Month (2026-03-01 to 2026-03-04)
 fb status --format json   # Structured JSON with entries and totals
 ```
 
+Internal entries are shown as `Internal / <Project Name>`.
+
 ### `fb delete`
 
 Delete a time entry. Interactive by default — shows today's entries for selection. Use `--id` to skip the picker.
@@ -280,8 +290,12 @@ fb edit --id 12345 --duration 1.5 --yes  # Scripted — update duration, skip co
 fb edit --id 12345 --note "Updated note" --date 2026-03-01 --yes
 fb edit --id 12345 --service "Meetings" --yes  # Change service
 fb edit --id 12345 --client "Globex Inc" --project "Mobile App" --yes
+fb edit --id 12345 --project "AI Service Design" --service "Meetings" --yes
+fb edit --id 12345 --internal --project "AI Service Design" --service "Meetings" --yes
 fb edit --id 12345 --duration 2 --yes --format json  # JSON output
 ```
+
+When `--project` points to an internal project, `fb edit` omits `client_id` from the update payload so the entry becomes clientless.
 
 ### `fb cache`
 
@@ -338,5 +352,6 @@ fb status --format json
 - `--format json` — structured output on all commands
 - `--no-interactive` — explicit non-interactive mode (also auto-detected)
 - `--id` — required for edit/delete in non-interactive mode
-- `--client`, `--duration`, `--note` — required for log in non-interactive mode (with multiple clients)
+- `--client`, `--duration`, `--note` — required for client-backed log resolution in non-interactive mode (with multiple clients)
+- `--internal` — force internal-project resolution; requires `--project` and conflicts with `--client`
 - `--service` — specify service by name (services are project-scoped; see `fb projects --format json`)

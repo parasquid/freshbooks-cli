@@ -78,10 +78,11 @@ Use `fb auth status --format json` and branch exactly once per blocker:
 
 - Before logging, resolve resources in this order:
   1. `fb clients --format json`
-  2. `fb projects --client "Name" --format json`
+  2. `fb projects --client "Name" --format json` for client-backed work, or `fb projects --format json` when the target may be internal
 - Services are project-scoped. Always resolve service from the selected project's `services` array.
 - Never depend on `fb services` alone for logging decisions.
-- If multiple clients exist and user did not specify one, ask once for client name.
+- Internal projects may be used without `--client`. If `project.internal` is true or `project.client_id` is null, treat the entry as clientless.
+- If multiple clients exist and the target is client-backed and user did not specify one, ask once for client name.
 - If project is ambiguous, ask once for project name.
 - If service cannot be inferred from user intent, ask once for service name.
 
@@ -121,8 +122,12 @@ fb entries --from YYYY-MM-DD --to YYYY-MM-DD --format json  # Date range
 ### Log Time
 ```bash
 fb log --client "Client Name" --project "Project" --service "Service" --duration HOURS --note "Description" --yes --format json
+fb log --project "AI Service Design" --service "Meetings" --duration 0.5 --note "Calum 1:1" --yes --format json
+fb log --internal --project "AI Service Design" --service "Meetings" --duration 0.5 --note "Calum 1:1" --yes --format json
 # --project is required when multiple projects are possible and should be supplied for deterministic automation.
-# --date is optional; --client, --duration, --note, and --service are required.
+# --date is optional; --duration, --note, and --service are required.
+# --client is required only for client-backed project resolution when the project does not determine the client.
+# --internal requires --project and conflicts with --client.
 # IMPORTANT: Always include --service. Infer the service from context (e.g. "development work" → "Development",
 # "meeting" → "Meetings", "research" → "Research"). If unsure, ask the user. Never omit --service.
 ```
@@ -132,6 +137,8 @@ fb log --client "Client Name" --project "Project" --service "Service" --duration
 fb edit --id ENTRY_ID --duration HOURS --yes --format json
 fb edit --id ENTRY_ID --note "New note" --yes --format json
 fb edit --id ENTRY_ID --service "Meetings" --yes --format json
+fb edit --id ENTRY_ID --project "AI Service Design" --service "Meetings" --yes --format json
+fb edit --id ENTRY_ID --internal --project "AI Service Design" --service "Meetings" --yes --format json
 # Edit preserves all existing fields — only specified flags are changed
 ```
 
@@ -143,7 +150,7 @@ fb delete --id ENTRY_ID --yes --format json
 ### List Resources
 ```bash
 fb clients --format json
-fb projects --format json                   # Includes project-scoped services in response
+fb projects --format json                   # Includes project-scoped services in response; internal projects show "internal": true
 fb projects --client "Name" --format json   # Filter by client; services array shows available services
 fb business --format json
 ```
@@ -176,9 +183,11 @@ fb cache refresh                # Force refresh
 - `Could not find 'code' parameter`:
   - Ask user to paste full redirect URL including query string.
 - `Multiple clients found. Use --client`:
-  - Ask once for client name, then continue.
+  - Ask once for client name, unless the chosen project is internal.
 - `Multiple projects found. Use --project`:
   - Ask once for project name, then continue.
+- `Project <name> is not internal`:
+  - Remove `--internal` or choose an actual internal project.
 - `Service not found`:
   - Refresh project list for selected client and pick service from that project.
 - Missing required flags in non-interactive mode:

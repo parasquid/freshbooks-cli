@@ -272,6 +272,25 @@ RSpec.describe FreshBooks::CLI::Commands do
       Then { output.include?("Website Redesign") }
       And  { !output.include?("Other Project") }
     end
+
+    context "table output shows Internal for internal projects" do
+      Given {
+        stub_request(:get, projects_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "projects" => [{ "id" => 12375603, "title" => "AI Service Design", "client_id" => nil, "internal" => true, "active" => true }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+      }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["projects"]) } }
+      Then { output.include?("AI Service Design") }
+      And  { output.include?("Internal") }
+    end
   end
 
   # --- services ---
@@ -392,6 +411,51 @@ RSpec.describe FreshBooks::CLI::Commands do
           json["today"]["total_hours"] == 1.0 &&
           json["today"]["entries"].first["client"] == "Acme Corp"
       }
+    end
+
+    context "with internal entries" do
+      Given {
+        today = Date.today.to_s
+        stub_request(:get, time_entries_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "time_entries" => [
+                  { "id" => 1, "client_id" => nil, "project_id" => 12375603, "duration" => 3600, "started_at" => today, "note" => "Calum 1:1" }
+                ],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, clients_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "clients" => [], "meta" => { "pages" => 1, "page" => 1 } } }.to_json
+          )
+        stub_request(:get, projects_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "projects" => [{ "id" => 12375603, "title" => "AI Service Design", "client_id" => nil, "internal" => true, "active" => true }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, services_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "services" => {} } }.to_json
+          )
+      }
+      When(:output) { capture_stdout { FreshBooks::CLI::Commands.start(["status"]) } }
+      Then { output.include?("Internal / AI Service Design") }
+      And  { output.include?("1.0h") }
     end
   end
 
@@ -525,6 +589,127 @@ RSpec.describe FreshBooks::CLI::Commands do
       When(:result) { invoke_cli_command(:edit, no_interactive: false, stub_abort: true) }
       Then { result.is_a?(CliAbort) }
     end
+
+    context "scripted edit moves an entry to an internal project and omits client_id" do
+      Given {
+        stub_request(:get, entry_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "time_entry" => {
+                  "id" => 999,
+                  "duration" => 1800,
+                  "note" => "Tristan : Calum 1:1",
+                  "started_at" => "2026-04-21T00:00:00Z",
+                  "client_id" => 1084081,
+                  "project_id" => 12668685,
+                  "service_id" => 15770631,
+                  "is_logged" => true
+                }
+              }
+            }.to_json
+          )
+        stub_request(:get, clients_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "clients" => [{ "id" => 1084081, "organization" => "CoinGecko", "fname" => "C", "lname" => "G" }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, projects_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "projects" => [
+                  { "id" => 12668685, "title" => "Ad Platform & Token Listing", "client_id" => 1084081, "internal" => false, "active" => true },
+                  {
+                    "id" => 12375603,
+                    "title" => "AI Service Design",
+                    "client_id" => nil,
+                    "internal" => true,
+                    "active" => true,
+                    "services" => [{ "id" => 15770631, "name" => "Meetings", "billable" => true }]
+                  }
+                ],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, services_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "services" => {} } }.to_json
+          )
+        stub_request(:put, entry_url)
+          .with { |req|
+            payload = JSON.parse(req.body)
+            entry = payload.fetch("time_entry")
+            entry["project_id"] == 12375603 &&
+              entry["service_id"] == 15770631 &&
+              !entry.key?("client_id")
+          }
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "time_entry" => { "id" => 999, "project_id" => 12375603, "service_id" => 15770631 }
+              }
+            }.to_json
+          )
+      }
+      When(:result) {
+        begin
+          capture_stdout {
+            FreshBooks::CLI::Commands.start([
+              "edit", "--id", "999", "--project", "AI Service Design",
+              "--service", "Meetings", "--yes", "--format", "json"
+            ])
+          }
+        rescue StandardError => e
+          e
+        end
+      }
+      Then { result.is_a?(String) && JSON.parse(result).dig("result", "time_entry", "id") == 999 }
+    end
+
+    context "scripted edit with --internal on a client-backed project aborts" do
+      Given {
+        stub_edit_apis
+        stub_request(:get, projects_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "projects" => [{ "id" => 20, "title" => "Website", "client_id" => 10, "internal" => false, "active" => true }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+      }
+      When(:result) {
+        invoke_cli_command(
+          :edit,
+          id: 999,
+          project: "Website",
+          internal: true,
+          yes: true,
+          no_interactive: true,
+          stub_abort: true
+        )
+      }
+      Then { result.is_a?(CliAbort) }
+    end
   end
 
   # --- log ---
@@ -654,6 +839,164 @@ RSpec.describe FreshBooks::CLI::Commands do
       }
       When(:result) {
         invoke_cli_command(:log, duration: 2.5, note: "test", yes: true, no_interactive: false, stub_abort: true)
+      }
+      Then { result.is_a?(CliAbort) }
+    end
+
+    context "non-interactive with --project on an internal project and no --client" do
+      Given {
+        allow($stdin).to receive(:tty?).and_return(false)
+
+        stub_request(:get, clients_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "clients" => [
+                  { "id" => 10, "organization" => "Acme Corp", "fname" => "J", "lname" => "D" },
+                  { "id" => 11, "organization" => "Globex Inc", "fname" => "G", "lname" => "X" }
+                ],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+
+        stub_request(:get, projects_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "projects" => [
+                  {
+                    "id" => 12375603,
+                    "title" => "AI Service Design",
+                    "client_id" => nil,
+                    "internal" => true,
+                    "active" => true,
+                    "services" => [{ "id" => 15770631, "name" => "Meetings", "billable" => true }]
+                  }
+                ],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+
+        stub_request(:post, time_entries_url)
+          .with { |req|
+            payload = JSON.parse(req.body)
+            entry = payload.fetch("time_entry")
+            entry["project_id"] == 12375603 &&
+              entry["service_id"] == 15770631 &&
+              !entry.key?("client_id")
+          }
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "time_entry" => { "id" => 777, "project_id" => 12375603, "service_id" => 15770631 }
+              }
+            }.to_json
+          )
+      }
+      When(:result) {
+        begin
+          capture_stdout {
+            FreshBooks::CLI::Commands.start([
+              "log", "--project", "AI Service Design", "--service", "Meetings",
+              "--duration", "0.5", "--note", "Calum 1:1", "--yes", "--format", "json"
+            ])
+          }
+        rescue SystemExit => e
+          e
+        end
+      }
+      Then { result.is_a?(String) && JSON.parse(result).dig("result", "time_entry", "id") == 777 }
+    end
+
+    context "non-interactive with --internal and --client aborts" do
+      Given {
+        allow($stdin).to receive(:tty?).and_return(false)
+        stub_log_apis
+      }
+      When(:result) {
+        invoke_cli_command(
+          :log,
+          client: "Acme Corp",
+          duration: 0.5,
+          note: "Calum 1:1",
+          yes: true,
+          internal: true,
+          no_interactive: false,
+          stub_abort: true
+        )
+      }
+      Then { result.is_a?(CliAbort) }
+    end
+
+    context "non-interactive with --internal on a client-backed project aborts" do
+      Given {
+        allow($stdin).to receive(:tty?).and_return(false)
+        stub_request(:get, clients_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "clients" => [{ "id" => 10, "organization" => "Acme Corp", "fname" => "J", "lname" => "D" }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, projects_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "projects" => [
+                  {
+                    "id" => 20,
+                    "title" => "Client Project",
+                    "client_id" => 10,
+                    "internal" => false,
+                    "active" => true
+                  }
+                ],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, services_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "services" => {} } }.to_json
+          )
+        stub_request(:post, time_entries_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "time_entry" => { "id" => 555, "duration" => 1800, "note" => "Calum 1:1" }
+              }
+            }.to_json
+          )
+      }
+      When(:result) {
+        invoke_cli_command(
+          :log,
+          project: "Client Project",
+          duration: 0.5,
+          note: "Calum 1:1",
+          yes: true,
+          internal: true,
+          no_interactive: false,
+          stub_abort: true
+        )
       }
       Then { result.is_a?(CliAbort) }
     end
@@ -894,6 +1237,53 @@ RSpec.describe FreshBooks::CLI::Commands do
       }
       Then { output.include?("ID") }
       And  { output.include?("42") }
+    end
+
+    context "table output shows Internal for internal entries" do
+      Given {
+        stub_request(:get, time_entries_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "time_entries" => [
+                  { "id" => 42, "client_id" => nil, "project_id" => 12375603, "duration" => 3600,
+                    "started_at" => "2024-03-01", "note" => "Calum 1:1" }
+                ],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, clients_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "clients" => [], "meta" => { "pages" => 1, "page" => 1 } } }.to_json
+          )
+        stub_request(:get, projects_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "result" => {
+                "projects" => [{ "id" => 12375603, "title" => "AI Service Design", "client_id" => nil, "internal" => true }],
+                "meta" => { "pages" => 1, "page" => 1 }
+              }
+            }.to_json
+          )
+        stub_request(:get, services_url)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "services" => {} } }.to_json
+          )
+      }
+      When(:output) {
+        capture_stdout { FreshBooks::CLI::Commands.start(["entries", "--from", "2024-03-01", "--to", "2024-03-31"]) }
+      }
+      Then { output.include?("Internal") }
+      And  { output.include?("AI Service Design") }
     end
   end
 

@@ -142,5 +142,6 @@ npx skills add https://skills.sh/parasquid/freshbooks-cli/freshbooks
 ## FreshBooks API Gotchas
 
 - **Services are project-scoped.** The global `/comments/business/{id}/services` endpoint often returns empty. Services are embedded in project JSON under the `services` array. Use `fb projects --format json` to see available services per project.
+- **Internal projects are clientless.** Internal projects come back with `internal: true` and `client_id: null`. For project-backed internal entries, omit `client_id` from create/update payloads instead of inventing a placeholder client. CLI output should render these as `Internal`.
 - **Dates must be full datetimes.** The API rejects bare dates like `"2026-03-04"` — use `"2026-03-04T00:00:00Z"`. The CLI's `normalize_datetime` helper handles this.
 - **PUT replaces, not patches.** Updating a time entry replaces the entire record. The `edit` command sends all existing fields (client_id, project_id, service_id, duration, note, started_at, is_logged) alongside any changed fields to avoid wiping data.
