@@ -1,7 +1,5 @@
 # Internal Project Client Resolution Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Allow `fb log` and `fb edit` to work correctly with internal FreshBooks projects, keep `client_id` omitted for internal project entries, and render internal records clearly in CLI output.
 
 **Architecture:** Keep the change narrow inside `FreshBooks::CLI::Commands` by adding a shared project/client resolution layer for `log` and `edit`, then reuse small display helpers for `entries`, `status`, `projects`, and interactive pickers. Preserve existing cached/default client behavior for normal flows while forcing a fresh project lookup only on internal or project-driven resolution paths.

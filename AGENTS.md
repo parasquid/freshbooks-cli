@@ -117,6 +117,7 @@ All commands support `--format json` (global class option). Mutation commands (`
 ## Planning & Issue Tracking
 
 - Design specs and implementation plans go in `docs/plans/` — nowhere else.
+- **Plans must be tool-agnostic.** Do not include instructions that depend on a specific agent platform, plugin, skill system, or external workflow framework unless the user explicitly asks for that integration. In particular, do not add boilerplate like "For agentic workers", "REQUIRED SUB-SKILL", or references to named plugins/tools in plan headers.
 - **Every plan must include these two bookend tasks — no exceptions:**
   - **Task 0 (first):** Post the full design spec to the related GitHub issue (not a link, not a summary — the full spec text). If no issue exists, create one first.
   - **Last task:** Update or create ALL related documentation: README, AGENTS.md, and any skill files (e.g. `skills/*/SKILL.md`) that reference changed behavior or conventions.
