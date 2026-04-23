@@ -125,6 +125,8 @@ All commands support `--format json` (global class option). Mutation commands (`
   - **Last task:** Update or create ALL related documentation: README, AGENTS.md, and any skill files (e.g. `skills/*/SKILL.md`) that reference changed behavior or conventions.
 - These tasks must appear in the written plan and be executed like any other task.
 - **AGENTS.md must be self-contained.** Never reference local or global config files (e.g. `~/.claude/CLAUDE.md`, `settings.json`) — those are not available to other developers or agents running in different environments. All guidance belongs in this file directly.
+- **Do not change release infrastructure without explicit approval.** Changes to release workflows, CI, tags, publishing configuration, or other production release machinery are a separate scope from feature work and require explicit user approval before any edits or manual release actions.
+- **Do not overstate memory.** Do not imply that conversational instructions will persist across future sessions. If a rule must survive beyond the current thread, add it to this file or another user-approved durable repo document.
 - **Answer simple commands directly.** When the user runs an informational command (`git branch`, `git status`, `git log`, etc.), output the result and stop. Do not add commentary, observations, or suggestions unless asked.
 - **Never include real user data in issues or PRs.** FreshBooks client names, entry IDs, project names, and any live API data must be replaced with generic placeholders (e.g. `"My Client"`, `<entry-id>`) before posting.
 
