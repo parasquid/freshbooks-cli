@@ -217,19 +217,21 @@ module FreshBooks
       method_option :duration, type: :numeric, desc: "Duration in hours (e.g. 2.5)"
       method_option :note, type: :string, desc: "Work description"
       method_option :date, type: :string, desc: "Date (YYYY-MM-DD, defaults to today)"
+      method_option :internal, type: :boolean, default: false, desc: "Log to an internal project with no client"
       method_option :yes, type: :boolean, default: false, desc: "Skip confirmation"
       def log
         Auth.valid_access_token
         defaults = Auth.load_defaults
 
-        client = select_client(defaults)
-        project = select_project(client["id"], defaults)
+        context = resolve_log_context(defaults)
+        client = context[:client]
+        project = context[:project]
         service = select_service(defaults, project)
         date = pick_date
         duration_hours = pick_duration
         note = pick_note
 
-        client_name = display_name(client)
+        client_name = client ? display_name(client) : "Internal"
 
         unless options[:format] == "json"
           puts "\n--- Time Entry Summary ---"
@@ -252,9 +254,9 @@ module FreshBooks
           "is_logged" => true,
           "duration" => (duration_hours * 3600).to_i,
           "note" => note,
-          "started_at" => normalize_datetime(date),
-          "client_id" => client["id"]
+          "started_at" => normalize_datetime(date)
         }
+        entry["client_id"] = client["id"] if client
         entry["project_id"] = project["id"] if project
         entry["service_id"] = service["id"] if service
 
@@ -266,7 +268,8 @@ module FreshBooks
           puts "Time entry created!"
         end
 
-        new_defaults = { "client_id" => client["id"] }
+        new_defaults = {}
+        new_defaults["client_id"] = client["id"] if client
         new_defaults["project_id"] = project["id"] if project
         new_defaults["service_id"] = service["id"] if service
         Auth.save_defaults(new_defaults)
@@ -328,7 +331,7 @@ module FreshBooks
 
         rows = entries.map do |e|
           date = (e["local_started_at"] || e["started_at"] || "?").slice(0, 10)
-          client = maps[:clients][e["client_id"].to_s] || e["client_id"].to_s
+          client = display_client_name(e["client_id"], maps)
           project = maps[:projects][e["project_id"].to_s] || "-"
           service = maps[:services][e["service_id"].to_s] || "-"
           note = e["note"] || ""
@@ -341,7 +344,7 @@ module FreshBooks
         total = entries.sum { |e| e["duration"].to_i } / 3600.0
 
         # Per-client breakdown
-        by_client = entries.group_by { |e| maps[:clients][e["client_id"].to_s] || e["client_id"].to_s }
+        by_client = entries.group_by { |e| display_client_name(e["client_id"], maps) }
         if by_client.length > 1
           puts "\nBy client:"
           by_client.sort_by { |_, es| -es.sum { |e| e["duration"].to_i } }.each do |name, es|
@@ -416,7 +419,7 @@ module FreshBooks
         end
 
         rows = projects.map do |p|
-          client_name = maps[:clients][p["client_id"].to_s] || "-"
+          client_name = display_project_client_name(p, maps)
           [p["title"], client_name, p["active"] ? "active" : "inactive"]
         end
 
@@ -520,6 +523,7 @@ module FreshBooks
       method_option :client, type: :string, desc: "New client name"
       method_option :project, type: :string, desc: "New project name"
       method_option :service, type: :string, desc: "New service name"
+      method_option :internal, type: :boolean, default: false, desc: "Move entry to an internal project with no client"
       method_option :yes, type: :boolean, default: false, desc: "Skip confirmation"
       def edit
         Auth.valid_access_token
@@ -535,7 +539,7 @@ module FreshBooks
         abort("Time entry not found.") unless entry
 
         maps = Spinner.spin("Resolving names") { Api.build_name_maps }
-        has_edit_flags = options[:duration] || options[:note] || options[:date] || options[:client] || options[:project] || options[:service]
+        has_edit_flags = options[:duration] || options[:note] || options[:date] || options[:client] || options[:project] || options[:service] || options[:internal]
         scripted = has_edit_flags || !interactive?
 
         fields = build_edit_fields(entry, maps, scripted)
@@ -544,11 +548,18 @@ module FreshBooks
         current_project = maps[:projects][entry["project_id"].to_s] || "-"
         current_hours = (entry["duration"].to_i / 3600.0).round(2)
         new_hours = fields["duration"] ? (fields["duration"].to_i / 3600.0).round(2) : current_hours
+        summary_client = if fields.key?("client_id")
+          fields["client_id"] ? maps[:clients][fields["client_id"].to_s] : "Internal"
+        elsif fields["project_id"] != entry["project_id"]
+          "Internal"
+        else
+          current_client
+        end
 
         unless options[:format] == "json"
           puts "\n--- Edit Summary ---"
           puts "  Date:     #{fields["started_at"] || entry["started_at"]}"
-          puts "  Client:   #{fields["client_id"] ? maps[:clients][fields["client_id"].to_s] : current_client}"
+          puts "  Client:   #{summary_client}"
           puts "  Project:  #{fields["project_id"] ? maps[:projects][fields["project_id"].to_s] : current_project}"
           puts "  Duration: #{new_hours}h"
           puts "  Note:     #{fields["note"] || entry["note"]}"
@@ -644,6 +655,63 @@ module FreshBooks
         return false if options[:no_interactive]
         return true if options[:interactive]
         $stdin.tty?
+      end
+
+      def resolve_log_context(defaults)
+        validate_internal_log_options!
+
+        if options[:project] && (!options[:client] || options[:internal])
+          project = resolve_project_by_name(options[:project], force: true)
+          ensure_project_matches_internal_option!(project)
+          client = project_internal?(project) ? nil : resolve_client_for_project(project)
+          return { client: client, project: project }
+        end
+
+        client = select_client(defaults)
+        project = select_project(client["id"], defaults)
+        { client: client, project: project }
+      end
+
+      def validate_internal_log_options!
+        abort("Cannot combine --client with --internal.") if options[:client] && options[:internal]
+        abort("--internal requires --project.") if options[:internal] && !options[:project]
+      end
+
+      def validate_internal_edit_options!
+        abort("Cannot combine --client with --internal.") if options[:client] && options[:internal]
+        abort("--internal requires --project.") if options[:internal] && !options[:project]
+      end
+
+      def resolve_project_by_name(name, force: false)
+        projects = Spinner.spin("Fetching projects") { Api.fetch_projects(force: force) }
+        match = projects.find { |project| project["title"].downcase == name.downcase }
+        abort("Project not found: #{name}") unless match
+        match
+      end
+
+      def project_internal?(project)
+        project["internal"] || project["client_id"].nil?
+      end
+
+      def display_client_name(client_id, maps)
+        return "Internal" if client_id.nil?
+        maps[:clients][client_id.to_s] || client_id.to_s
+      end
+
+      def display_project_client_name(project, maps)
+        return "Internal" if project_internal?(project)
+        maps[:clients][project["client_id"].to_s] || "-"
+      end
+
+      def ensure_project_matches_internal_option!(project)
+        abort("Project #{project["title"]} is not internal.") if options[:internal] && !project_internal?(project)
+      end
+
+      def resolve_client_for_project(project)
+        clients = Spinner.spin("Fetching clients") { Api.fetch_clients }
+        match = clients.find { |client| client["id"].to_i == project["client_id"].to_i }
+        abort("Client not found for project: #{project["title"]}") unless match
+        match
       end
 
       def select_client(defaults)
@@ -865,7 +933,7 @@ module FreshBooks
 
         grouped = {}
         entries.each do |e|
-          client = maps[:clients][e["client_id"].to_s] || e["client_id"].to_s
+          client = display_client_name(e["client_id"], maps)
           project = maps[:projects][e["project_id"].to_s] || "-"
           key = "#{client} / #{project}"
           grouped[key] ||= 0.0
@@ -884,7 +952,7 @@ module FreshBooks
         entry_data = entries.map do |e|
           {
             "id" => e["id"],
-            "client" => maps[:clients][e["client_id"].to_s] || e["client_id"].to_s,
+            "client" => display_client_name(e["client_id"], maps),
             "project" => maps[:projects][e["project_id"].to_s] || "-",
             "duration" => e["duration"],
             "hours" => (e["duration"].to_i / 3600.0).round(2),
@@ -907,7 +975,7 @@ module FreshBooks
 
         puts "\nToday's entries:\n\n"
         entries.each_with_index do |e, i|
-          client = maps[:clients][e["client_id"].to_s] || e["client_id"].to_s
+          client = display_client_name(e["client_id"], maps)
           hours = (e["duration"].to_i / 3600.0).round(2)
           note = (e["note"] || "").slice(0, 40)
           puts "  #{i + 1}. [#{e["id"]}] #{client} — #{hours}h — #{note}"
@@ -935,20 +1003,24 @@ module FreshBooks
         }
 
         if scripted
+          validate_internal_edit_options!
           fields["duration"] = (options[:duration] * 3600).to_i if options[:duration]
           fields["note"] = options[:note] if options[:note]
           fields["started_at"] = normalize_datetime(options[:date]) if options[:date]
 
-          if options[:client]
+          if options[:project]
+            project = resolve_project_by_name(options[:project], force: true)
+            ensure_project_matches_internal_option!(project)
+            fields["project_id"] = project["id"]
+            if project_internal?(project)
+              fields.delete("client_id")
+            else
+              fields["client_id"] = project["client_id"].to_i
+            end
+          elsif options[:client]
             client_id = maps[:clients].find { |_id, name| name.downcase == options[:client].downcase }&.first
             abort("Client not found: #{options[:client]}") unless client_id
             fields["client_id"] = client_id.to_i
-          end
-
-          if options[:project]
-            project_id = maps[:projects].find { |_id, name| name.downcase == options[:project].downcase }&.first
-            abort("Project not found: #{options[:project]}") unless project_id
-            fields["project_id"] = project_id.to_i
           end
 
           if options[:service]
@@ -1023,12 +1095,13 @@ module FreshBooks
               usage: "fb log",
               interactive: "Prompts for missing fields when interactive; requires --duration and --note when non-interactive",
               flags: {
-                "--client" => "Client name (required non-interactive if multiple clients, auto-selected if single)",
-                "--project" => "Project name (optional, auto-selected if single)",
-                "--service" => "Service name (optional)",
+                "--client" => "Client name (required only for client-backed resolution when multiple clients exist)",
+                "--project" => "Project name (can be internal; internal projects may be used without --client)",
+                "--service" => "Service name (project-scoped; optional if single/default)",
                 "--duration" => "Duration in hours, e.g. 2.5 (required non-interactive)",
                 "--note" => "Work description (required non-interactive)",
                 "--date" => "Date YYYY-MM-DD (defaults to today)",
+                "--internal" => "Force internal-project resolution; requires --project and conflicts with --client",
                 "--yes" => "Skip confirmation prompt"
               }
             },
@@ -1080,8 +1153,9 @@ module FreshBooks
                 "--note" => "New note",
                 "--date" => "New date (YYYY-MM-DD)",
                 "--client" => "New client name",
-                "--project" => "New project name",
+                "--project" => "New project name (internal projects omit client_id)",
                 "--service" => "New service name",
+                "--internal" => "Force internal-project resolution; requires --project and conflicts with --client",
                 "--yes" => "Skip confirmation prompt"
               }
             },
