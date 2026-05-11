@@ -122,7 +122,7 @@ fb auth status                 # human-readable
 fb auth status --format json   # structured output
 ```
 
-Tokens auto-refresh before every API call — no need to re-auth unless you revoke app access.
+Tokens auto-refresh before every API call — no need to re-auth unless you revoke app access. Refresh is serialized across concurrent `fb` processes so parallel commands can reuse the newly written token.
 
 ### `fb business`
 

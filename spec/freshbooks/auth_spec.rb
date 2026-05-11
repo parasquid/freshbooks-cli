@@ -118,6 +118,110 @@ RSpec.describe FreshBooks::CLI::Auth do
     end
   end
 
+  describe ".save_tokens" do
+    context "when replacing an existing token file fails at rename" do
+      Given(:original_tokens) {
+        {
+          "access_token" => "old_access",
+          "refresh_token" => "old_refresh",
+          "expires_in" => 3600,
+          "created_at" => Time.now.to_i
+        }
+      }
+
+      Given {
+        FreshBooks::CLI::Auth.save_tokens(original_tokens)
+        allow(File).to receive(:rename).and_call_original
+        allow(File).to receive(:rename).with(/tokens\.json\./, FreshBooks::CLI::Auth.tokens_path).and_raise(Errno::EACCES)
+      }
+
+      When(:result) {
+        begin
+          FreshBooks::CLI::Auth.save_tokens(
+            "access_token" => "new_access",
+            "refresh_token" => "new_refresh",
+            "expires_in" => 3600,
+            "created_at" => Time.now.to_i
+          )
+        rescue Errno::EACCES => e
+          e
+        end
+      }
+
+      Then { result.is_a?(Errno::EACCES) }
+      And  { FreshBooks::CLI::Auth.load_tokens == original_tokens }
+    end
+  end
+
+  describe ".valid_access_token with expired tokens" do
+    Given(:config) { { "client_id" => "cid", "client_secret" => "csec" } }
+
+    Given {
+      allow(FreshBooks::CLI::Auth).to receive(:require_config).and_return(config)
+    }
+
+    context "when another process refreshed tokens before the lock is acquired" do
+      Given {
+        FreshBooks::CLI::Auth.save_tokens(
+          "access_token" => "old_access",
+          "refresh_token" => "old_refresh",
+          "expires_in" => 3600,
+          "created_at" => Time.now.to_i - 7200
+        )
+
+        allow(FreshBooks::CLI::Auth).to receive(:token_expired?).and_wrap_original do |original, tokens|
+          if tokens && tokens["access_token"] == "old_access"
+            FreshBooks::CLI::Auth.save_tokens(
+              "access_token" => "fresh_access",
+              "refresh_token" => "fresh_refresh",
+              "expires_in" => 3600,
+              "created_at" => Time.now.to_i
+            )
+          end
+          original.call(tokens)
+        end
+
+        stub_request(:post, FreshBooks::CLI::Auth::TOKEN_URL)
+      }
+
+      When(:result) { FreshBooks::CLI::Auth.valid_access_token }
+      Then { result == "fresh_access" }
+      And  {
+        assert_not_requested(:post, FreshBooks::CLI::Auth::TOKEN_URL)
+        true
+      }
+    end
+
+    context "when tokens are still expired inside the lock" do
+      Given {
+        FreshBooks::CLI::Auth.save_tokens(
+          "access_token" => "old_access",
+          "refresh_token" => "old_refresh",
+          "expires_in" => 3600,
+          "created_at" => Time.now.to_i - 7200
+        )
+
+        stub_request(:post, FreshBooks::CLI::Auth::TOKEN_URL)
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "access_token" => "new_access",
+              "refresh_token" => "new_refresh",
+              "expires_in" => 3600
+            }.to_json
+          )
+      }
+
+      When(:result) { FreshBooks::CLI::Auth.valid_access_token }
+      Then { result == "new_access" }
+      And  {
+        assert_requested(:post, FreshBooks::CLI::Auth::TOKEN_URL, times: 1)
+        true
+      }
+    end
+  end
+
   # --- Scope Checking ---
 
   describe ".check_scopes" do

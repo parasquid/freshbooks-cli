@@ -60,6 +60,10 @@ module FreshBooks
           File.join(data_dir, "tokens.json")
         end
 
+        def tokens_lock_path
+          File.join(data_dir, "tokens.json.lock")
+        end
+
         def defaults_path
           File.join(data_dir, "defaults.json")
         end
@@ -258,7 +262,15 @@ module FreshBooks
 
         def save_tokens(tokens)
           ensure_data_dir
-          File.write(tokens_path, JSON.pretty_generate(tokens) + "\n")
+          tmp_path = "#{tokens_path}.#{$$}.tmp"
+          File.open(tmp_path, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |file|
+            file.write(JSON.pretty_generate(tokens) + "\n")
+            file.flush
+            file.fsync
+          end
+          File.rename(tmp_path, tokens_path)
+        ensure
+          File.delete(tmp_path) if tmp_path && File.exist?(tmp_path)
         end
 
         def token_expired?(tokens)
@@ -297,6 +309,20 @@ module FreshBooks
           new_tokens
         end
 
+        def refresh_token_with_lock(config, tokens)
+          ensure_data_dir
+          File.open(tokens_lock_path, File::RDWR | File::CREAT, 0o600) do |lock_file|
+            lock_file.flock(File::LOCK_EX)
+
+            latest_tokens = load_tokens || tokens
+            return latest_tokens if latest_tokens && !token_expired?(latest_tokens)
+
+            refresh_token!(config, latest_tokens || tokens)
+          ensure
+            lock_file.flock(File::LOCK_UN)
+          end
+        end
+
         def valid_access_token
           if Thread.current[:fb_dry_run]
             tokens = load_tokens
@@ -315,7 +341,7 @@ module FreshBooks
 
           if token_expired?(tokens)
             puts "Token expired, refreshing..."
-            tokens = refresh_token!(config, tokens)
+            tokens = refresh_token_with_lock(config, tokens)
           end
 
           tokens["access_token"]

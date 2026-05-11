@@ -26,7 +26,7 @@ rspec
 
 The gem is a CLI (`FreshBooks::CLI`) built on Thor, with four components:
 
-- **Auth** (`lib/freshbooks/auth.rb`) — OAuth2 flow, token management, config/cache/defaults persistence. All state stored as JSON files in `FreshBooks::CLI::Auth.data_dir` (see resolution order below). Tests redirect this to a tmpdir. Provides both interactive (`setup_config`, `authorize`, `discover_business`) and non-interactive (`setup_config_from_args`, `authorize_url`, `extract_code_from_url`, `exchange_code`, `fetch_businesses`, `select_business`, `auth_status`) methods.
+- **Auth** (`lib/freshbooks/auth.rb`) — OAuth2 flow, token management, config/cache/defaults persistence. All state stored as JSON files in `FreshBooks::CLI::Auth.data_dir` (see resolution order below). Token writes are atomic, and token refresh uses a sibling lock file to serialize concurrent refreshes and re-read freshly written tokens. Tests redirect this to a tmpdir. Provides both interactive (`setup_config`, `authorize`, `discover_business`) and non-interactive (`setup_config_from_args`, `authorize_url`, `extract_code_from_url`, `exchange_code`, `fetch_businesses`, `select_business`, `auth_status`) methods.
 - **Api** (`lib/freshbooks/api.rb`) — FreshBooks REST client. All HTTP goes through HTTParty. Paginated fetching via `fetch_all_pages`. Name maps (client/project/service ID → name) cached for 10 minutes in `cache.json`. Services are project-scoped — `build_name_maps` extracts them from project data, not just the global services endpoint.
 - **Commands** (`lib/freshbooks/cli.rb`) — Thor subclass (`FreshBooks::CLI::Commands`). Commands: `auth`, `business`, `log`, `entries`, `clients`, `projects`, `services`, `status`, `edit`, `delete`, `cache`, `help`, `version`. Interactive prompts read from `$stdin`. Interactive detection via `$stdin.tty?` + `--no-interactive` flag.
 - **Spinner** (`lib/freshbooks/spinner.rb`) — Braille animation spinner. Yields to a block, returns block result. Globally stubbed in tests to just yield.
@@ -106,7 +106,7 @@ All commands support `--format json` (global class option). Mutation commands (`
 ## Key Patterns
 
 - All modules use `class << self` (singleton methods only, no instances)
-- Config, tokens, defaults, cache are all separate JSON files under `FreshBooks::CLI::Auth.data_dir`
+- Config, tokens, defaults, cache are all separate JSON files under `FreshBooks::CLI::Auth.data_dir`; token refresh coordination uses `tokens.json.lock`
 - `FreshBooks::CLI::Auth.data_dir=` is the seam for test isolation — point it at a tmpdir; set to `nil` to reset to auto-resolution. Resolution order: `FRESHBOOKS_HOME` env var → `~/.fb` (legacy) → platform-native default (macOS: `~/Library/Application Support/freshbooks`; Linux: `~/.config/freshbooks`)
 - Docker wrapper (`./fb`) runs CLI in container with the data directory bind-mounted and host `TZ` passed through
 
