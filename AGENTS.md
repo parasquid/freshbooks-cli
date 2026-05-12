@@ -20,6 +20,11 @@ rspec
 # Bump lib/freshbooks/version.rb on master and push the commit.
 # GitHub Actions publishes the gem via trusted publishing and creates the GitHub Release.
 # The release workflow can also be triggered manually from GitHub via workflow_dispatch.
+# A release is successful only after verifying all of:
+#   1. GitHub Actions release workflow completed successfully
+#   2. GitHub Release exists for vX.Y.Z
+#   3. git tag vX.Y.Z exists locally after git fetch --tags
+#   4. RubyGems reports the new version, e.g. gem info freshbooks-cli --remote
 ```
 
 ## Architecture
