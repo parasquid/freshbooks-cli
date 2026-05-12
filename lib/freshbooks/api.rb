@@ -41,8 +41,6 @@ module FreshBooks
         # --- Paginated fetch ---
 
         def fetch_all_pages(url, result_key, params: {})
-          return [] if Thread.current[:fb_dry_run]
-
           page = 1
           all_items = []
 
@@ -132,8 +130,6 @@ module FreshBooks
         # --- Services ---
 
         def fetch_services(force: false)
-          return (Auth.load_cache["services_data"] || []) if Thread.current[:fb_dry_run]
-
           unless force
             cached = cached_data("services_data")
             return cached if cached

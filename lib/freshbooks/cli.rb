@@ -16,7 +16,7 @@ module FreshBooks
       class_option :no_interactive, type: :boolean, default: false, desc: "Disable interactive prompts (auto-detected when not a TTY)"
       class_option :interactive, type: :boolean, default: false, desc: "Force interactive mode even when not a TTY"
       class_option :format, type: :string, desc: "Output format: table (default) or json"
-      class_option :dry_run, type: :boolean, default: false, desc: "Simulate command without making network calls"
+      class_option :dry_run, type: :boolean, default: false, desc: "Simulate writes while allowing read lookups"
 
       no_commands do
         def invoke_command(command, *args)
@@ -1066,7 +1066,7 @@ module FreshBooks
           global_flags: {
             "--no-interactive" => "Disable interactive prompts (auto-detected when not a TTY)",
             "--format json"    => "Output format: json (available on all commands)",
-            "--dry-run"        => "Simulate command without making network calls (writes skipped)"
+            "--dry-run"        => "Simulate writes while allowing read lookups"
           },
           commands: {
             auth: {
