@@ -290,16 +290,33 @@ RSpec.describe FreshBooks::CLI::Api do
       Then { result == [{ "id" => 1, "organization" => "Acme" }] }
     end
 
-    describe ".fetch_all_pages returns empty array in dry-run" do
+    describe ".fetch_all_pages makes real GET in dry-run" do
+      Given {
+        stub_request(:get, "https://api.freshbooks.com/fake")
+          .with(query: hash_including("page" => "1", "per_page" => "100"))
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "items" => [{ "id" => 1 }], "meta" => { "pages" => 1, "page" => 1 } } }.to_json
+          )
+      }
       When(:result) {
         FreshBooks::CLI::Api.fetch_all_pages("https://api.freshbooks.com/fake", "items")
       }
-      Then { result == [] }
+      Then { result == [{ "id" => 1 }] }
     end
 
-    describe ".fetch_services returns empty array in dry-run (no HTTP)" do
+    describe ".fetch_services makes real GET in dry-run when cache is empty" do
+      Given {
+        stub_request(:get, %r{api\.freshbooks\.com/comments/business/12345/services})
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "services" => { "5" => { "id" => 5, "name" => "Dev" } } } }.to_json
+          )
+      }
       When(:result) { FreshBooks::CLI::Api.fetch_services }
-      Then { result == [] }
+      Then { result == [{ "id" => 5, "name" => "Dev" }] }
     end
 
     describe ".fetch_services uses stale cache in dry-run" do
@@ -312,6 +329,24 @@ RSpec.describe FreshBooks::CLI::Api do
       }
       When(:result) { FreshBooks::CLI::Api.fetch_services }
       Then { result == [{ "id" => 5, "name" => "Dev" }] }
+    end
+
+    describe ".fetch_services force: true bypasses stale cache in dry-run" do
+      Given {
+        stale_cache = {
+          "updated_at" => Time.now.to_i - 700,
+          "services_data" => [{ "id" => 5, "name" => "Cached" }]
+        }
+        FreshBooks::CLI::Auth.save_cache(stale_cache)
+        stub_request(:get, %r{api\.freshbooks\.com/comments/business/12345/services})
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: { "result" => { "services" => { "6" => { "id" => 6, "name" => "Fresh" } } } }.to_json
+          )
+      }
+      When(:result) { FreshBooks::CLI::Api.fetch_services(force: true) }
+      Then { result == [{ "id" => 6, "name" => "Fresh" }] }
     end
 
     describe ".fetch_time_entry makes real GET in dry-run" do

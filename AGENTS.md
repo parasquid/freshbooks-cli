@@ -80,12 +80,12 @@ The `data_dir=` setter still works for test isolation — point it at a tmpdir. 
 All commands support `--dry-run` (global class option). When set:
 
 - Auth is partially bypassed — `valid_access_token` returns the stored access token if one exists and is not expired; falls back to `"dry-run-token"` when unauthenticated. `require_config` reads config.json directly without requiring credentials
-- Most read API calls use cached data ignoring freshness (stale cache is acceptable); if cache is empty, reads return `[]`. Single-entry reads (`fetch_time_entry`) make a real API call using the available token, so `edit --dry-run` shows actual entry data when authenticated
+- Read API calls may still hit FreshBooks so name resolution and previews match real commands. Cached data can still be used where normal command paths use cache.
 - Write API calls (`create_time_entry`, `update_time_entry`, `delete_time_entry`) return mock responses without hitting the network
 - A `[DRY RUN] No changes will be made.` banner is printed to stderr before the command runs
 - With `--format json`, all output is wrapped with `"_dry_run": {"simulated": true}` metadata; array results are nested under `"data"`
 
-Implementation uses `Thread.current[:fb_dry_run]` set in `invoke_command` with `ensure` cleanup (intentionally unchanged internal detail — not tied to the module namespace). Dry-run guards are added as the first line of ~8 leaf methods in `FreshBooks::CLI::Auth` and `FreshBooks::CLI::Api`. All business logic (name map building, pagination, caching) runs unchanged through the same code paths.
+Implementation uses `Thread.current[:fb_dry_run]` set in `invoke_command` with `ensure` cleanup (intentionally unchanged internal detail — not tied to the module namespace). Dry-run guards are limited to auth bypass and write leaf methods in `FreshBooks::CLI::Auth` and `FreshBooks::CLI::Api`. All business logic (name map building, pagination, caching) runs unchanged through the same code paths.
 
 ### JSON Output
 

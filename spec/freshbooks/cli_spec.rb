@@ -1324,6 +1324,7 @@ RSpec.describe FreshBooks::CLI::Commands do
   # --- dry-run integration ---
 
   describe "dry-run integration" do
+    let(:projects_url) { %r{api\.freshbooks\.com/projects/business/12345/projects} }
     let(:stale_cache) {
       {
         "updated_at" => Time.now.to_i - 700,
@@ -1425,6 +1426,42 @@ RSpec.describe FreshBooks::CLI::Commands do
         Then {
           json = JSON.parse(stdout)
           json["_dry_run"]["simulated"] == true
+        }
+      end
+
+      context "resolves project names with read APIs" do
+        Given {
+          stub_request(:get, projects_url)
+            .to_return(
+              status: 200,
+              headers: { "Content-Type" => "application/json" },
+              body: {
+                "result" => {
+                  "projects" => [{ "id" => 12375603, "title" => "Some Internal Project", "client_id" => nil, "internal" => true }],
+                  "meta" => { "pages" => 1, "page" => 1 }
+                }
+              }.to_json
+            )
+        }
+        When(:result) {
+          begin
+            capture_stdout {
+              FreshBooks::CLI::Commands.start([
+                "edit", "--id", "999", "--internal", "--project", "Some Internal Project",
+                "--duration", "2.0", "--yes", "--dry-run", "--format", "json"
+              ])
+            }
+          rescue SystemExit => e
+            e
+          end
+        }
+        Then {
+          payload = JSON.parse(result)["_dry_run"]["payload_sent"]
+          payload["project_id"] == 12375603 && !payload.key?("client_id")
+        }
+        And {
+          assert_requested(:get, projects_url, times: 1)
+          true
         }
       end
     end
