@@ -162,6 +162,7 @@ module FreshBooks
             if status_data["tokens_exist"]
               puts "Expired: #{status_data["tokens_expired"] ? "yes" : "no"}"
             end
+            puts "Requires re-auth: #{status_data["requires_reauth"] ? "yes" : "no"}"
             puts "Business ID: #{status_data["business_id"] || "not set"}"
             puts "Account ID: #{status_data["account_id"] || "not set"}"
           end

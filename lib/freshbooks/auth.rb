@@ -9,6 +9,8 @@ require "dotenv"
 module FreshBooks
   module CLI
     class Auth
+      class TokenRefreshError < StandardError; end
+
       TOKEN_URL = "https://api.freshbooks.com/auth/oauth/token"
       AUTH_URL = "https://auth.freshbooks.com/oauth/authorize"
       ME_URL = "https://api.freshbooks.com/auth/api/v1/users/me"
@@ -204,14 +206,28 @@ module FreshBooks
         def auth_status
           config = load_config
           tokens = load_tokens
+          refresh_error = nil
+
+          if config && tokens && token_expired?(tokens)
+            begin
+              tokens = refresh_token_with_lock(config, tokens, abort_on_failure: false)
+            rescue TokenRefreshError => e
+              refresh_error = e.message
+            end
+          end
+
+          tokens_expired = tokens ? token_expired?(tokens) : nil
+          requires_reauth = config.nil? || tokens.nil? || tokens_expired == true
           {
             "config_exists" => !config.nil?,
             "config_path" => config_path,
             "tokens_exist" => !tokens.nil?,
-            "tokens_expired" => tokens ? token_expired?(tokens) : nil,
+            "tokens_expired" => tokens_expired,
+            "requires_reauth" => requires_reauth,
+            "refresh_error" => refresh_error,
             "business_id" => config&.dig("business_id"),
             "account_id" => config&.dig("account_id")
-          }
+          }.compact
         end
 
         def fetch_businesses(access_token)
@@ -280,22 +296,30 @@ module FreshBooks
           Time.now.to_i >= (created + expires_in - 60)
         end
 
-        def refresh_token!(config, tokens)
-          response = HTTParty.post(TOKEN_URL, {
-            headers: { "Content-Type" => "application/json" },
-            body: {
-              grant_type: "refresh_token",
-              client_id: config["client_id"],
-              client_secret: config["client_secret"],
-              redirect_uri: REDIRECT_URI,
-              refresh_token: tokens["refresh_token"]
-            }.to_json
-          })
+        def refresh_token!(config, tokens, abort_on_failure: true)
+          begin
+            response = HTTParty.post(TOKEN_URL, {
+              headers: { "Content-Type" => "application/json" },
+              body: {
+                grant_type: "refresh_token",
+                client_id: config["client_id"],
+                client_secret: config["client_secret"],
+                redirect_uri: REDIRECT_URI,
+                refresh_token: tokens["refresh_token"]
+              }.to_json
+            })
+          rescue StandardError => e
+            message = "Token refresh failed: #{e.class}: #{e.message}\nPlease re-run: fb auth"
+            raise if abort_on_failure
+            raise TokenRefreshError, message
+          end
 
           unless response.success?
             body = response.parsed_response
             msg = body.is_a?(Hash) ? (body["error_description"] || body["error"] || response.body) : response.body
-            abort("Token refresh failed: #{msg}\nPlease re-run: fb auth")
+            message = "Token refresh failed: #{msg}\nPlease re-run: fb auth"
+            abort(message) if abort_on_failure
+            raise TokenRefreshError, message
           end
 
           data = response.parsed_response
@@ -309,7 +333,7 @@ module FreshBooks
           new_tokens
         end
 
-        def refresh_token_with_lock(config, tokens)
+        def refresh_token_with_lock(config, tokens, abort_on_failure: true)
           ensure_data_dir
           File.open(tokens_lock_path, File::RDWR | File::CREAT, 0o600) do |lock_file|
             lock_file.flock(File::LOCK_EX)
@@ -317,7 +341,7 @@ module FreshBooks
             latest_tokens = load_tokens || tokens
             return latest_tokens if latest_tokens && !token_expired?(latest_tokens)
 
-            refresh_token!(config, latest_tokens || tokens)
+            refresh_token!(config, latest_tokens || tokens, abort_on_failure: abort_on_failure)
           ensure
             lock_file.flock(File::LOCK_UN)
           end

@@ -446,6 +446,7 @@ RSpec.describe FreshBooks::CLI::Auth do
       When(:result) { FreshBooks::CLI::Auth.auth_status }
       Then { result["config_exists"] == false }
       And  { result["tokens_exist"] == false }
+      And  { result["requires_reauth"] == true }
     end
 
     context "with config and tokens" do
@@ -463,7 +464,93 @@ RSpec.describe FreshBooks::CLI::Auth do
       Then { result["config_exists"] == true }
       And  { result["tokens_exist"] == true }
       And  { result["tokens_expired"] == false }
+      And  { result["requires_reauth"] == false }
       And  { result["business_id"] == 123 }
+    end
+
+    context "with expired access token and refreshable credentials" do
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "id"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "sec"
+        FreshBooks::CLI::Auth.save_config("business_id" => 123, "account_id" => "acc")
+        FreshBooks::CLI::Auth.save_tokens(
+          "access_token" => "old_access",
+          "refresh_token" => "refresh_me",
+          "expires_in" => 3600,
+          "created_at" => Time.now.to_i - 7200
+        )
+        stub_request(:post, FreshBooks::CLI::Auth::TOKEN_URL)
+          .with { |req| JSON.parse(req.body)["refresh_token"] == "refresh_me" }
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              "access_token" => "new_access",
+              "refresh_token" => "new_refresh",
+              "expires_in" => 3600
+            }.to_json
+          )
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
+      When(:result) { FreshBooks::CLI::Auth.auth_status }
+      Then { result["tokens_expired"] == false }
+      And  { result["requires_reauth"] == false }
+      And  { FreshBooks::CLI::Auth.load_tokens["access_token"] == "new_access" }
+    end
+
+    context "with expired access token and failed refresh" do
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "id"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "sec"
+        FreshBooks::CLI::Auth.save_config("business_id" => 123, "account_id" => "acc")
+        FreshBooks::CLI::Auth.save_tokens(
+          "access_token" => "old_access",
+          "refresh_token" => "bad_refresh",
+          "expires_in" => 3600,
+          "created_at" => Time.now.to_i - 7200
+        )
+        stub_request(:post, FreshBooks::CLI::Auth::TOKEN_URL)
+          .to_return(
+            status: 401,
+            headers: { "Content-Type" => "application/json" },
+            body: { "error" => "invalid_grant" }.to_json
+          )
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
+      When(:result) { FreshBooks::CLI::Auth.auth_status }
+      Then { result["tokens_expired"] == true }
+      And  { result["requires_reauth"] == true }
+      And  { result["refresh_error"].include?("Token refresh failed") }
+    end
+
+    context "with expired access token and refresh transport failure" do
+      Given {
+        ENV["FRESHBOOKS_CLIENT_ID"] = "id"
+        ENV["FRESHBOOKS_CLIENT_SECRET"] = "sec"
+        FreshBooks::CLI::Auth.save_config("business_id" => 123, "account_id" => "acc")
+        FreshBooks::CLI::Auth.save_tokens(
+          "access_token" => "old_access",
+          "refresh_token" => "timeout_refresh",
+          "expires_in" => 3600,
+          "created_at" => Time.now.to_i - 7200
+        )
+        stub_request(:post, FreshBooks::CLI::Auth::TOKEN_URL)
+          .to_timeout
+      }
+      after {
+        ENV.delete("FRESHBOOKS_CLIENT_ID")
+        ENV.delete("FRESHBOOKS_CLIENT_SECRET")
+      }
+      When(:result) { FreshBooks::CLI::Auth.auth_status }
+      Then { result["tokens_expired"] == true }
+      And  { result["requires_reauth"] == true }
+      And  { result["refresh_error"].include?("Token refresh failed") }
     end
   end
 

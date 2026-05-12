@@ -1216,6 +1216,7 @@ RSpec.describe FreshBooks::CLI::Commands do
       }
       Then { output.include?("Config:") }
       And  { output.include?("Tokens:") }
+      And  { output.include?("Requires re-auth:") }
     end
 
     context "status with --format json" do
@@ -1224,7 +1225,7 @@ RSpec.describe FreshBooks::CLI::Commands do
       }
       Then {
         json = JSON.parse(output)
-        json.key?("config_exists") && json.key?("tokens_exist")
+        json.key?("config_exists") && json.key?("tokens_exist") && json.key?("requires_reauth")
       }
     end
 
