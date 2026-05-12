@@ -122,7 +122,7 @@ fb auth status                 # human-readable
 fb auth status --format json   # structured output
 ```
 
-Tokens auto-refresh before every API call — no need to re-auth unless you revoke app access. Refresh is serialized across concurrent `fb` processes so parallel commands can reuse the newly written token.
+Tokens auto-refresh before every API call, and `fb auth status` also attempts the same silent refresh when the access token is stale. In JSON output, scripts should branch on `requires_reauth`; `tokens_expired` only remains true after status when browser re-auth is actually needed. Refresh is serialized across concurrent `fb` processes so parallel commands can reuse the newly written token.
 
 ### `fb business`
 
@@ -330,6 +330,7 @@ The CLI is designed to be fully scriptable. All commands support `--format json`
 # Preflight (recommended)
 command -v fb >/dev/null 2>&1
 fb auth status --format json
+# In JSON output, ask for browser OAuth only when requires_reauth is true.
 
 # 1. Save credentials (via env vars or <data_dir>/.env)
 export FRESHBOOKS_CLIENT_ID=YOUR_ID

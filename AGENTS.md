@@ -57,7 +57,7 @@ Auth supports both interactive (single `fb auth` command) and non-interactive (s
 - `fb auth setup` — writes credentials to `<data_dir>/.env` (interactive: prompts with masked secret; non-interactive: reads from `FRESHBOOKS_CLIENT_ID`/`FRESHBOOKS_CLIENT_SECRET` env vars or `<data_dir>/.env`)
 - `fb auth url` — prints OAuth URL
 - `fb auth callback REDIRECT_URL` — exchanges code for tokens, auto-selects single business
-- `fb auth status` — shows current auth state
+- `fb auth status` — shows current auth state and silently refreshes stale access tokens when refresh is possible; scripted callers should branch on `requires_reauth`, not raw `tokens_expired`
 - `fb business --select ID` — sets active business (required for multi-business accounts)
 
 ### Config Directory Resolution

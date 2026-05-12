@@ -56,11 +56,11 @@ Use `fb auth status --format json` and branch exactly once per blocker:
    - If response contains `"business_selected": false`:
      - Ask only for business ID, then run `fb business --select ID --format json`
 
-4. If `tokens_exist` is `true` and `tokens_expired` is `true`:
-   - Run: `fb clients --format json`
-   - If it succeeds, the CLI refreshed tokens automatically; continue with the auth state machine.
-   - If it fails with a token refresh or authorization error, run: `fb auth url --format json`
+4. If `requires_reauth` is `true`:
+   - Run: `fb auth url --format json`
    - Ask only for full redirect URL
+
+`fb auth status` silently refreshes stale access tokens when the refresh token is still usable. Do not ask for browser OAuth because `tokens_expired` was true in older output; branch on `requires_reauth` from current JSON output.
 
 5. If `tokens_exist` is `true` but `business_id` is null:
    - Run: `fb business --format json`
