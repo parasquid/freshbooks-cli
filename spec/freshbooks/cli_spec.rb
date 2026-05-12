@@ -582,6 +582,25 @@ RSpec.describe FreshBooks::CLI::Commands do
       }
     end
 
+    context "accepts common duration and note aliases" do
+      Given { stub_edit_apis }
+      When(:output) {
+        capture_stdout {
+          FreshBooks::CLI::Commands.start(["edit", "--id", "999", "--hours", "1.5", "--notes", "Updated note", "--yes", "--format", "json"])
+        }
+      }
+      Then {
+        json = JSON.parse(output)
+        response_matches = json["result"]["time_entry"]["id"] == 999
+        assert_requested(:put, entry_url) { |req|
+          entry = JSON.parse(req.body).fetch("time_entry")
+          entry["duration"] == 5400 &&
+            entry["note"] == "Updated note"
+        }
+        response_matches
+      }
+    end
+
     context "non-interactive without --id aborts" do
       Given {
         allow($stdin).to receive(:tty?).and_return(false)
@@ -782,6 +801,45 @@ RSpec.describe FreshBooks::CLI::Commands do
         json = JSON.parse(output)
         json["result"]["time_entry"]["id"] == 555
       }
+    end
+
+    context "non-interactive accepts common duration and note aliases" do
+      Given { stub_log_apis }
+      When(:output) {
+        capture_stdout {
+          FreshBooks::CLI::Commands.start(["log", "--client", "Acme Corp", "--hours", "2.5", "--notes", "test work", "--yes", "--format", "json"])
+        }
+      }
+      Then {
+        json = JSON.parse(output)
+        response_matches = json["result"]["time_entry"]["duration"] == 9000 &&
+          json["result"]["time_entry"]["note"] == "test work"
+        assert_requested(:post, time_entries_url) { |req|
+          entry = JSON.parse(req.body).fetch("time_entry")
+          entry["duration"] == 9000 &&
+            entry["note"] == "test work"
+        }
+        response_matches
+      }
+    end
+
+    context "unknown log option prints actionable guidance" do
+      When(:result) {
+        capture_stderr {
+          capture_stdout {
+            begin
+              FreshBooks::CLI::Commands.start(["log", "--duration", "0.5", "--details", "x"])
+            rescue SystemExit
+              nil
+            end
+          }
+        }
+      }
+      Then { result.include?("Unknown option: --details") }
+      Then { result.include?("fb log requires:") }
+      Then { result.include?("--duration HOURS") }
+      Then { result.include?("--note TEXT") }
+      Then { result.include?("Example:") }
     end
 
     context "non-interactive missing --duration aborts" do
@@ -1310,6 +1368,18 @@ RSpec.describe FreshBooks::CLI::Commands do
       capture_stdout { FreshBooks::CLI::Commands.start(["help", "--format", "json"]) }
     }
     Then { JSON.parse(output)["global_flags"].key?("--dry-run") }
+  end
+
+  describe "log help" do
+    When(:output) {
+      capture_stdout {
+        FreshBooks::CLI::Commands.start(["log", "--help"])
+      }
+    }
+    Then { output.include?("log [--client NAME] [--project NAME] [--service NAME] --duration HOURS --note TEXT") }
+    Then { output.include?("--hours") }
+    Then { output.include?("Sample Project") }
+    Then { output.include?("Reviewed pull requests") }
   end
 
   # --- dry-run banner ---

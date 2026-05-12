@@ -46,6 +46,10 @@ end
 - **No TTY** (pipes, agents, CI): uses flags, auto-selects single options, or aborts with clear errors
 - `--no-interactive` flag forces non-interactive mode
 
+### Agent-Friendly CLI Parsing
+
+`fb log` uses `--duration` and `--note` as canonical scripted flags. It also accepts `--hours` and `--notes` as aliases, and `fb edit` accepts the same aliases for updates. `fb log --help` prints command-specific usage, required non-interactive fields, and examples. Unknown `fb log` options should produce actionable guidance with the unknown flag, required fields, and an example invocation.
+
 ### Auth Flow
 
 Auth supports both interactive (single `fb auth` command) and non-interactive (subcommands) flows:

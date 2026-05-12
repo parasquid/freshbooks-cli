@@ -113,6 +113,7 @@ When executing `fb` commands:
 - **Always** use `--id` for `edit` and `delete` commands
 - Parse JSON output to extract entry IDs, totals, and status
 - After each mutation (`log`, `edit`, `delete`), run one verification read (`fb entries ... --format json` or `fb status --format json`) and report the result.
+- For `fb log` and `fb edit`, prefer canonical `--duration` and `--note`. The CLI also accepts `--hours` and `--notes` aliases. If command shape is unclear, run `fb log --help` before retrying.
 
 **Important: Services are project-scoped and MUST always be specified when logging time.** `fb services` may return empty — services are embedded in project data. Use `--service "Name"` with the service name from the project (visible in `fb projects --format json` under the `services` array). Common service names: Development, Research, General, Meetings. Infer the service from context clues in the user's request (e.g. "development work" → "Development", "a meeting" → "Meetings"). If the service cannot be inferred, ask the user before logging.
 
@@ -132,6 +133,7 @@ fb log --project "AI Service Design" --service "Meetings" --duration 0.5 --note 
 fb log --internal --project "AI Service Design" --service "Meetings" --duration 0.5 --note "Calum 1:1" --yes --format json
 # --project is required when multiple projects are possible and should be supplied for deterministic automation.
 # --date is optional; --duration, --note, and --service are required.
+# --hours is accepted as an alias for --duration; --notes is accepted as an alias for --note.
 # --client is required only for client-backed project resolution when the project does not determine the client.
 # --internal requires --project and conflicts with --client.
 # IMPORTANT: Always include --service. Infer the service from context (e.g. "development work" → "Development",
@@ -146,6 +148,7 @@ fb edit --id ENTRY_ID --service "Meetings" --yes --format json
 fb edit --id ENTRY_ID --project "AI Service Design" --service "Meetings" --yes --format json
 fb edit --id ENTRY_ID --internal --project "AI Service Design" --service "Meetings" --yes --format json
 # Edit preserves all existing fields — only specified flags are changed
+# --hours is accepted as an alias for --duration; --notes is accepted as an alias for --note.
 ```
 
 ### Delete Entry
