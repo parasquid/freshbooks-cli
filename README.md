@@ -180,6 +180,8 @@ fb log --project "AI Service Design" --service "Meetings" --duration 0.5 --note 
 fb log --internal --project "AI Service Design" --service "Meetings" --duration 0.5 --note "Calum 1:1" --yes --format json
 ```
 
+`--duration` and `--note` are the canonical scripted flags. `--hours` and `--notes` are accepted aliases for callers that guess those names. Run `fb log --help` for command-specific usage, required non-interactive fields, and examples.
+
 **Notes:**
 - Services are project-scoped. Use `fb projects --format json` to see available services per project.
 - Internal projects can be logged without `--client`.
@@ -294,6 +296,8 @@ fb edit --id 12345 --project "AI Service Design" --service "Meetings" --yes
 fb edit --id 12345 --internal --project "AI Service Design" --service "Meetings" --yes
 fb edit --id 12345 --duration 2 --yes --format json  # JSON output
 ```
+
+`--duration` and `--note` remain the canonical edit flags. `--hours` and `--notes` are accepted aliases.
 
 When `--project` points to an internal project, `fb edit` omits `client_id` from the update payload so the entry becomes clientless.
 

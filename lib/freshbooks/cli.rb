@@ -13,6 +13,44 @@ module FreshBooks
         true
       end
 
+      def self.dispatch(command, given_args, given_opts, config)
+        requested_command = command || given_args.first
+
+        super
+      rescue Thor::UnknownArgumentError => e
+        if requested_command.to_s == "log"
+          unknown_option = e.unknown.first
+          raise Thor::InvocationError, log_parse_error_message(unknown_option, e.message)
+        end
+
+        raise
+      end
+
+      def self.handle_argument_error(command, error, args, arity)
+        unknown_option = args.find { |arg| arg.to_s.start_with?("--") }
+        if command.name == "log" && unknown_option
+          raise Thor::InvocationError, log_parse_error_message(unknown_option, error.message)
+        end
+
+        super
+      end
+
+      def self.log_parse_error_message(option, fallback)
+        suggestion = { "--hours" => "--duration", "--notes" => "--note" }[option]
+        lines = ["Unknown option: #{option || fallback}"]
+        lines << "Did you mean: #{suggestion}" if suggestion
+        lines.concat([
+          "",
+          "fb log requires:",
+          "  --duration HOURS",
+          "  --note TEXT",
+          "",
+          "Example:",
+          '  fb log --project "Sample Project" --service "Development" --duration 0.5 --note "Reviewed pull requests" --yes'
+        ])
+        lines.join("\n")
+      end
+
       class_option :no_interactive, type: :boolean, default: false, desc: "Disable interactive prompts (auto-detected when not a TTY)"
       class_option :interactive, type: :boolean, default: false, desc: "Force interactive mode even when not a TTY"
       class_option :format, type: :string, desc: "Output format: table (default) or json"
@@ -210,16 +248,32 @@ module FreshBooks
 
       # --- log ---
 
-      desc "log", "Log a time entry"
+      desc "log [--client NAME] [--project NAME] [--service NAME] --duration HOURS --note TEXT [--date YYYY-MM-DD] [--internal] [--yes]",
+        "Log a time entry"
+      long_desc <<~DESC
+        Log a FreshBooks time entry.
+
+        Non-interactive usage requires --duration and --note. Use --client when multiple clients exist, or --internal with --project for internal work.
+
+        Examples:
+          fb log --project "Sample Project" --service "Development" --duration 0.5 --note "Reviewed pull requests" --yes
+          fb log --internal --project "Admin" --hours 1 --notes "Planning" --yes
+      DESC
       method_option :client, type: :string, desc: "Pre-select client by name"
       method_option :project, type: :string, desc: "Pre-select project by name"
       method_option :service, type: :string, desc: "Pre-select service by name"
-      method_option :duration, type: :numeric, desc: "Duration in hours (e.g. 2.5)"
-      method_option :note, type: :string, desc: "Work description"
+      method_option :duration, type: :numeric, aliases: "--hours", desc: "Duration in hours (e.g. 2.5)"
+      method_option :note, type: :string, aliases: "--notes", desc: "Work description"
       method_option :date, type: :string, desc: "Date (YYYY-MM-DD, defaults to today)"
       method_option :internal, type: :boolean, default: false, desc: "Log to an internal project with no client"
       method_option :yes, type: :boolean, default: false, desc: "Skip confirmation"
+      method_option :help, type: :boolean, desc: "Show command help"
       def log
+        if options[:help]
+          self.class.command_help(shell, "log")
+          return
+        end
+
         Auth.valid_access_token
         defaults = Auth.load_defaults
 
@@ -517,8 +571,8 @@ module FreshBooks
 
       desc "edit", "Edit a time entry"
       method_option :id, type: :numeric, desc: "Time entry ID (skip interactive picker)"
-      method_option :duration, type: :numeric, desc: "New duration in hours"
-      method_option :note, type: :string, desc: "New note"
+      method_option :duration, type: :numeric, aliases: "--hours", desc: "New duration in hours"
+      method_option :note, type: :string, aliases: "--notes", desc: "New note"
       method_option :date, type: :string, desc: "New date (YYYY-MM-DD)"
       method_option :client, type: :string, desc: "New client name"
       method_option :project, type: :string, desc: "New project name"
